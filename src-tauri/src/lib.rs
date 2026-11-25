@@ -1,6 +1,7 @@
 mod commands;
 mod config;
 mod game;
+mod icon;
 mod install;
 mod mods;
 mod net;
@@ -9,6 +10,10 @@ mod paks;
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
+        .setup(|app| {
+            icon::apply(app.handle());
+            Ok(())
+        })
         .invoke_handler(tauri::generate_handler![
             commands::get_config,
             commands::save_config,
@@ -27,6 +32,9 @@ pub fn run() {
             commands::read_log,
             commands::open_path,
             commands::open_url,
+            commands::get_icon,
+            commands::set_icon,
+            commands::reset_icon,
         ])
         .run(tauri::generate_context!())
         .expect("failed to start KMod Launcher");

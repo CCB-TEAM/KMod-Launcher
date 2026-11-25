@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
+import { open } from "@tauri-apps/plugin-dialog";
 import { api, errText, type Config, type InstallState } from "./api";
-import { ToastHost } from "./toast";
+import { ToastHost, useToast } from "./toast";
 import Home from "./pages/Home";
 import Loader from "./pages/Loader";
 import Mods from "./pages/Mods";
@@ -25,9 +26,23 @@ export interface Shared {
   state: InstallState | null;
   refresh: () => Promise<void>;
   go: (p: PageId) => void;
+  /** Custom icon as a data URL; the built-in icon when empty. */
+  iconUrl: string;
+  pickIcon: () => Promise<void>;
+  resetIcon: () => Promise<void>;
 }
 
 export default function App() {
+  return (
+    <ToastHost>
+      <Inner />
+    </ToastHost>
+  );
+}
+
+function Inner() {
+  const toast = useToast();
+  const [iconUrl, setIconUrl] = useState("");
   const [page, setPage] = useState<PageId>("home");
   const [config, setCfg] = useState<Config | null>(null);
   const [state, setState] = useState<InstallState | null>(null);
@@ -54,19 +69,44 @@ export default function App() {
     applyTheme(list.find((t) => t.id === config.theme) ?? list[0]);
   }, [config?.theme, config?.custom_themes]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  useEffect(() => {
+    api.getIcon().then((u) => setIconUrl(u ?? "")).catch(() => {});
+  }, []);
+
+  const pickIcon = async () => {
+    const f = await open({ title: "选择图标", filters: [{ name: "图标 (PNG / ICO)", extensions: ["png", "ico"] }] });
+    if (typeof f !== "string") return;
+    try {
+      await api.setIcon(f);
+      setIconUrl((await api.getIcon()) ?? "");
+      toast("ok", "图标已更换");
+    } catch (e) {
+      toast("err", errText(e));
+    }
+  };
+  const resetIcon = async () => {
+    try {
+      await api.resetIcon();
+      setIconUrl("");
+      toast("ok", "已恢复默认图标");
+    } catch (e) {
+      toast("err", errText(e));
+    }
+  };
+
   const setConfig = async (c: Config) => {
     setCfg(await api.saveConfig(c));
     await refresh();
   };
 
   if (!config) return <div className="boot">{fatal || "正在加载…"}</div>;
-  const shared: Shared = { config, setConfig, state, refresh, go: setPage };
+  const shared: Shared = { config, setConfig, state, refresh, go: setPage, iconUrl, pickIcon, resetIcon };
   const needGame = !config.game_dir;
 
   return (
-    <ToastHost>
+    <>
       <div className="shell">
-        <TitleBar />
+        <TitleBar iconUrl={iconUrl} />
         <div className="app">
           <nav className="side">
             {PAGES.map(({ id, label, Icon }) => (
@@ -90,6 +130,6 @@ export default function App() {
           </main>
         </div>
       </div>
-    </ToastHost>
+    </>
   );
 }

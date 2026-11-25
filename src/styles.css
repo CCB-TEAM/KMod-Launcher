@@ -64,7 +64,13 @@ h2.sec svg { width: 18px; height: 18px; }
 p { margin: 0 0 10px; line-height: 1.55; }
 
 .hero { display: flex; align-items: center; gap: 28px; padding: 14px 8px 4px; }
-.hero img { width: 96px; height: 96px; border-radius: 22px; box-shadow: var(--shadow); }
+.hero-icon { display: flex; flex-direction: column; align-items: center; gap: 4px; }
+.iconbtn { position: relative; padding: 0; width: 96px; height: 96px; border-radius: 22px; overflow: hidden; background: #f3f2f6; box-shadow: var(--shadow); }
+.iconbtn:hover:not(:disabled) { background: #f3f2f6; }
+.iconbtn img { width: 100%; height: 100%; object-fit: contain; padding: 8px; display: block; }
+.iconbtn span { position: absolute; inset: auto 0 0 0; padding: 4px 0; font-size: 12px; text-align: center; color: #fff; background: rgba(0, 0, 0, 0.6); opacity: 0; transition: opacity 0.12s; }
+.iconbtn:hover span { opacity: 1; }
+.tb-icon { width: 18px; height: 18px; align-self: center; border-radius: 4px; background: #f3f2f6; padding: 1px; }
 .hero h1 { font-size: 44px; line-height: 1.1; margin: 0 0 8px; }
 .hero p { color: var(--muted); font-size: 18px; margin: 0; }
 

@@ -41,6 +41,8 @@ pub fn save_config(app: AppHandle, mut config: Config) -> Result<Config, String>
     if config.flavor != "dev" {
         config.flavor = "release".into();
     }
+    // The icon is only changed through set_icon / reset_icon (the UI may hold a stale copy).
+    config.icon = config::load(&app).icon;
     config::save(&app, &config)?;
     Ok(config)
 }
@@ -207,4 +209,19 @@ pub fn open_url(url: String) -> Result<(), String> {
         .spawn()
         .map(|_| ())
         .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub fn get_icon(app: AppHandle) -> Option<String> {
+    crate::icon::data_url(&app)
+}
+
+#[tauri::command]
+pub fn set_icon(app: AppHandle, source: String) -> Result<(), String> {
+    crate::icon::set(&app, &source)
+}
+
+#[tauri::command]
+pub fn reset_icon(app: AppHandle) -> Result<(), String> {
+    crate::icon::reset(&app)
 }

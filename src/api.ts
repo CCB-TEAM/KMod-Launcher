@@ -9,6 +9,7 @@ export interface Config {
   mirror: string;
   theme: string;
   custom_themes: unknown[];
+  icon: string;
 }
 
 export interface InstallState {
@@ -68,6 +69,9 @@ export const api = {
   readLog: (name: "kmod" | "proxy") => invoke<string>("read_log", { name }),
   openPath: (which: Folder) => invoke<void>("open_path", { which }),
   openUrl: (url: string) => invoke<void>("open_url", { url }),
+  getIcon: () => invoke<string | null>("get_icon"),
+  setIcon: (source: string) => invoke<void>("set_icon", { source }),
+  resetIcon: () => invoke<void>("reset_icon"),
 };
 
 export interface Progress {

@@ -4,10 +4,11 @@ const run = (f: (w: ReturnType<typeof getCurrentWindow>) => Promise<void>) => ()
   void f(getCurrentWindow()).catch(() => {});
 };
 
-export default function TitleBar() {
+export default function TitleBar({ iconUrl }: { iconUrl: string }) {
   return (
     <header className="titlebar" data-tauri-drag-region>
       <div className="tb-title" data-tauri-drag-region>
+        <img className="tb-icon" src={iconUrl || "/icon.png"} alt="" />
         <span data-tauri-drag-region>KMod Launcher</span>
         <small data-tauri-drag-region>0.1.0</small>
       </div>

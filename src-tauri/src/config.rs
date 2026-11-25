@@ -20,6 +20,8 @@ pub struct Config {
     pub theme: String,
     /// User-made themes; the frontend owns their shape.
     pub custom_themes: Vec<serde_json::Value>,
+    /// File name of the custom app icon inside the config directory; empty = built-in icon.
+    pub icon: String,
 }
 
 impl Default for Config {
@@ -32,6 +34,7 @@ impl Default for Config {
             mirror: String::new(),
             theme: "violet".into(),
             custom_themes: Vec::new(),
+            icon: String::new(),
         }
     }
 }

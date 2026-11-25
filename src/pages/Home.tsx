@@ -5,9 +5,19 @@ import type { Shared } from "../App";
 import GamePicker from "./GamePicker";
 import { IconFolder, IconLoader, IconPlay } from "../Icons";
 
-const Hero = () => (
+const Hero = ({ iconUrl, pickIcon, resetIcon }: Pick<Shared, "iconUrl" | "pickIcon" | "resetIcon">) => (
   <div className="hero">
-    <img src="/icon.png" alt="" />
+    <div className="hero-icon">
+      <button className="iconbtn" title="点击更换图标" onClick={pickIcon}>
+        <img src={iconUrl || "/icon.png"} alt="" />
+        <span>更换</span>
+      </button>
+      {iconUrl && (
+        <button className="ghost small" onClick={resetIcon}>
+          恢复默认
+        </button>
+      )}
+    </div>
     <div>
       <h1>KMod Launcher</h1>
       <p>KARDS 的 KMod 加载器安装与模组管理器</p>
@@ -31,7 +41,7 @@ export default function Home(p: Shared) {
   if (!config.game_dir) {
     return (
       <div className="page">
-        <Hero />
+        <Hero iconUrl={p.iconUrl} pickIcon={p.pickIcon} resetIcon={p.resetIcon} />
         <h2 className="sec"><IconFolder />选择游戏路径</h2>
         <p className="muted">先选择 KARDS 的安装位置，之后就可以安装加载器、管理模组。</p>
         <GamePicker config={config} setConfig={p.setConfig} />
@@ -52,7 +62,7 @@ export default function Home(p: Shared) {
 
   return (
     <div className="page">
-      <Hero />
+      <Hero iconUrl={p.iconUrl} pickIcon={p.pickIcon} resetIcon={p.resetIcon} />
 
       <h2 className="sec"><IconFolder />游戏路径</h2>
       <div className="row grow-row">
