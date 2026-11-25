@@ -7,6 +7,7 @@ import Mods from "./pages/Mods";
 import Logs from "./pages/Logs";
 import Settings from "./pages/Settings";
 import TitleBar from "./TitleBar";
+import { allThemes, applyTheme } from "./themes";
 import { IconHome, IconLoader, IconMods, IconLogs, IconSettings } from "./Icons";
 
 const PAGES = [
@@ -46,6 +47,12 @@ export default function App() {
   useEffect(() => {
     void refresh();
   }, [refresh]);
+
+  useEffect(() => {
+    if (!config) return;
+    const list = allThemes(config.custom_themes);
+    applyTheme(list.find((t) => t.id === config.theme) ?? list[0]);
+  }, [config?.theme, config?.custom_themes]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const setConfig = async (c: Config) => {
     setCfg(await api.saveConfig(c));

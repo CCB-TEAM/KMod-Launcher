@@ -7,6 +7,8 @@ export interface Config {
   prereleases: boolean;
   proxy: string;
   mirror: string;
+  theme: string;
+  custom_themes: unknown[];
 }
 
 export interface InstallState {

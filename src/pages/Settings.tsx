@@ -3,6 +3,7 @@ import { errText } from "../api";
 import { useToast } from "../toast";
 import type { Shared } from "../App";
 import GamePicker from "./GamePicker";
+import ThemeSettings from "./ThemeSettings";
 
 export default function Settings({ config, setConfig }: Shared) {
   const toast = useToast();
@@ -26,6 +27,7 @@ export default function Settings({ config, setConfig }: Shared) {
         <p className="mono small">{config.game_dir || "未选择"}</p>
         <GamePicker config={config} setConfig={setConfig} />
       </section>
+      <ThemeSettings config={config} setConfig={setConfig} />
       <section className="card">
         <h2>网络</h2>
         <label className="field">

@@ -16,6 +16,10 @@ pub struct Config {
     pub proxy: String,
     /// Optional prefix put in front of GitHub download URLs (a mirror).
     pub mirror: String,
+    /// Id of the selected theme (built-in or one of `custom_themes`).
+    pub theme: String,
+    /// User-made themes; the frontend owns their shape.
+    pub custom_themes: Vec<serde_json::Value>,
 }
 
 impl Default for Config {
@@ -26,6 +30,8 @@ impl Default for Config {
             prereleases: true,
             proxy: String::new(),
             mirror: String::new(),
+            theme: "violet".into(),
+            custom_themes: Vec::new(),
         }
     }
 }
