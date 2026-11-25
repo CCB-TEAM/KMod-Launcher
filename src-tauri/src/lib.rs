@@ -4,6 +4,7 @@ mod game;
 mod install;
 mod mods;
 mod net;
+mod paks;
 
 pub fn run() {
     tauri::Builder::default()

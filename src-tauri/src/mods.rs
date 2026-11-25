@@ -12,8 +12,10 @@ pub struct ModInfo {
     pub author: String,
     pub description: String,
     pub enabled: bool,
-    /// "folder" or "kmod"
+    /// "lua", "native" or "pak"
     pub kind: String,
+    /// How it is packaged: "folder", "kmod" or "pak"
+    pub pack: String,
     /// File or folder name inside kmod\mods
     pub file: String,
 }
@@ -55,7 +57,16 @@ fn manifest_of_kmod(path: &Path) -> Option<Value> {
     parse_manifest(&s)
 }
 
-fn info(m: &Value, enabled: &[String], kind: &str, file: String) -> ModInfo {
+/// A mod is native on Windows when `native` is a string, or an object that has a `Windows` entry.
+fn is_native(m: &Value) -> bool {
+    match &m["native"] {
+        Value::String(s) => !s.is_empty(),
+        Value::Object(o) => o.get("Windows").map(|v| v.as_str().map(|s| !s.is_empty()).unwrap_or(false)).unwrap_or(false),
+        _ => false,
+    }
+}
+
+fn info(m: &Value, enabled: &[String], pack: &str, file: String) -> ModInfo {
     let id = m["id"].as_str().unwrap_or("").to_string();
     let s = |k: &str| m[k].as_str().unwrap_or("").to_string();
     ModInfo {
@@ -65,7 +76,8 @@ fn info(m: &Value, enabled: &[String], kind: &str, file: String) -> ModInfo {
         author: s("author"),
         description: s("description"),
         id,
-        kind: kind.into(),
+        kind: if is_native(m) { "native" } else { "lua" }.into(),
+        pack: pack.into(),
         file,
     }
 }

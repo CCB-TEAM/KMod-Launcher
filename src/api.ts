@@ -40,11 +40,12 @@ export interface ModInfo {
   author: string;
   description: string;
   enabled: boolean;
-  kind: "folder" | "kmod";
+  kind: "lua" | "native" | "pak";
+  pack: "folder" | "kmod" | "pak";
   file: string;
 }
 
-export type Folder = "game" | "kmod" | "mods" | "logs";
+export type Folder = "game" | "kmod" | "mods" | "paks" | "logs";
 
 export const api = {
   getConfig: () => invoke<Config>("get_config"),
@@ -59,9 +60,9 @@ export const api = {
     invoke<void>("install_loader", { url: a.url, size: a.size, tag, flavor: a.flavor, replaceForeign }),
   uninstallLoader: (removeData: boolean) => invoke<void>("uninstall_loader", { removeData }),
   listMods: () => invoke<ModInfo[]>("list_mods"),
-  setModEnabled: (id: string, enabled: boolean) => invoke<void>("set_mod_enabled", { id, enabled }),
+  setModEnabled: (id: string, enabled: boolean, kind: string) => invoke<void>("set_mod_enabled", { id, enabled, kind }),
   installMod: (source: string) => invoke<string>("install_mod", { source }),
-  deleteMod: (file: string, id: string) => invoke<void>("delete_mod", { file, id }),
+  deleteMod: (file: string, id: string, kind: string) => invoke<void>("delete_mod", { file, id, kind }),
   readLog: (name: "kmod" | "proxy") => invoke<string>("read_log", { name }),
   openPath: (which: Folder) => invoke<void>("open_path", { which }),
   openUrl: (url: string) => invoke<void>("open_url", { url }),

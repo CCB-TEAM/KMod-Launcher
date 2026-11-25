@@ -2,6 +2,7 @@ use crate::config::{self, Config};
 use crate::game::{self, kmod_dir, EXE};
 use crate::install::{self, InstallState};
 use crate::mods::{self, ModInfo};
+use crate::paks;
 use crate::net::{self, Release};
 use std::path::PathBuf;
 use tauri::AppHandle;
@@ -122,22 +123,43 @@ pub fn uninstall_loader(app: AppHandle, remove_data: bool) -> Result<(), String>
 
 #[tauri::command]
 pub fn list_mods(app: AppHandle) -> Result<Vec<ModInfo>, String> {
-    Ok(mods::list(&win64(&app)?))
+    let dir = win64(&app)?;
+    let mut all = mods::list(&dir);
+    all.extend(paks::list(&dir));
+    Ok(all)
 }
 
 #[tauri::command]
-pub fn set_mod_enabled(app: AppHandle, id: String, enabled: bool) -> Result<(), String> {
-    mods::set_enabled(&win64(&app)?, &id, enabled)
+pub fn set_mod_enabled(app: AppHandle, id: String, enabled: bool, kind: String) -> Result<(), String> {
+    let dir = win64(&app)?;
+    if kind == "pak" {
+        if game_running() {
+            return Err("游戏正在运行，请先关闭游戏".into());
+        }
+        return paks::set_enabled(&dir, &id, enabled);
+    }
+    mods::set_enabled(&dir, &id, enabled)
 }
 
 #[tauri::command]
 pub fn install_mod(app: AppHandle, source: String) -> Result<String, String> {
-    mods::install(&win64(&app)?, &source)
+    let dir = win64(&app)?;
+    if source.to_lowercase().ends_with(".pak") {
+        return paks::install(&dir, &source);
+    }
+    mods::install(&dir, &source)
 }
 
 #[tauri::command]
-pub fn delete_mod(app: AppHandle, file: String, id: String) -> Result<(), String> {
-    mods::delete(&win64(&app)?, &file, &id)
+pub fn delete_mod(app: AppHandle, file: String, id: String, kind: String) -> Result<(), String> {
+    let dir = win64(&app)?;
+    if kind == "pak" {
+        if game_running() {
+            return Err("游戏正在运行，请先关闭游戏".into());
+        }
+        return paks::delete(&dir, &file);
+    }
+    mods::delete(&dir, &file, &id)
 }
 
 /// Last part of the loader log (about 200 KB).
@@ -163,6 +185,7 @@ pub fn open_path(app: AppHandle, which: String) -> Result<(), String> {
         "game" => base,
         "kmod" => kmod_dir(&base),
         "mods" => kmod_dir(&base).join("mods"),
+        "paks" => paks::paks_dir(&base).ok_or("找不到 Paks 文件夹")?,
         "logs" => kmod_dir(&base).join("logs"),
         _ => return Err("未知目录".into()),
     };
