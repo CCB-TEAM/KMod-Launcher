@@ -6,13 +6,15 @@ import Loader from "./pages/Loader";
 import Mods from "./pages/Mods";
 import Logs from "./pages/Logs";
 import Settings from "./pages/Settings";
+import TitleBar from "./TitleBar";
+import { IconHome, IconLoader, IconMods, IconLogs, IconSettings } from "./Icons";
 
 const PAGES = [
-  { id: "home", label: "主页" },
-  { id: "loader", label: "加载器" },
-  { id: "mods", label: "模组" },
-  { id: "logs", label: "日志" },
-  { id: "settings", label: "设置" },
+  { id: "home", label: "主页", Icon: IconHome },
+  { id: "loader", label: "加载器", Icon: IconLoader },
+  { id: "mods", label: "模组", Icon: IconMods },
+  { id: "logs", label: "日志", Icon: IconLogs },
+  { id: "settings", label: "设置", Icon: IconSettings },
 ] as const;
 type PageId = (typeof PAGES)[number]["id"];
 
@@ -56,32 +58,30 @@ export default function App() {
 
   return (
     <ToastHost>
-      <div className="app">
-        <nav className="side">
-          <div className="brand">
-            <img src="/icon.png" alt="" />
-            <span>KMod</span>
-          </div>
-          {PAGES.map((p) => (
-            <button
-              key={p.id}
-              className={page === p.id ? "nav active" : "nav"}
-              disabled={needGame && p.id !== "home" && p.id !== "settings"}
-              onClick={() => setPage(p.id)}
-            >
-              {p.label}
-            </button>
-          ))}
-          <div className="grow" />
-          <div className="ver">Launcher 0.1.0</div>
-        </nav>
-        <main className="content">
-          {page === "home" && <Home {...shared} />}
-          {page === "loader" && <Loader {...shared} />}
-          {page === "mods" && <Mods {...shared} />}
-          {page === "logs" && <Logs {...shared} />}
-          {page === "settings" && <Settings {...shared} />}
-        </main>
+      <div className="shell">
+        <TitleBar />
+        <div className="app">
+          <nav className="side">
+            {PAGES.map(({ id, label, Icon }) => (
+              <button
+                key={id}
+                className={page === id ? "nav active" : "nav"}
+                disabled={needGame && id !== "home" && id !== "settings"}
+                onClick={() => setPage(id)}
+              >
+                <Icon />
+                <span>{label}</span>
+              </button>
+            ))}
+          </nav>
+          <main className="content">
+            {page === "home" && <Home {...shared} />}
+            {page === "loader" && <Loader {...shared} />}
+            {page === "mods" && <Mods {...shared} />}
+            {page === "logs" && <Logs {...shared} />}
+            {page === "settings" && <Settings {...shared} />}
+          </main>
+        </div>
       </div>
     </ToastHost>
   );

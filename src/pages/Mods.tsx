@@ -3,10 +3,12 @@ import { open } from "@tauri-apps/plugin-dialog";
 import { api, errText, type ModInfo } from "../api";
 import { useToast } from "../toast";
 import type { Shared } from "../App";
+import { IconSearch } from "../Icons";
 
 export default function Mods({ state }: Shared) {
   const toast = useToast();
   const [mods, setMods] = useState<ModInfo[] | null>(null);
+  const [q, setQ] = useState("");
 
   const load = useCallback(async () => {
     try {
@@ -64,42 +66,48 @@ export default function Mods({ state }: Shared) {
     }
   };
 
+  const needle = q.trim().toLowerCase();
+  const shown = mods?.filter((m) => !needle || `${m.name} ${m.id} ${m.author} ${m.description}`.toLowerCase().includes(needle));
+  const enabledCount = mods?.filter((m) => m.enabled).length ?? 0;
+
   return (
     <div className="page">
-      <div className="between">
-        <h1>模组</h1>
+      <div className="head">
+        <div>
+          <h1>模组管理</h1>
+          <small className="muted">
+            {enabledCount} / {mods?.length ?? 0} 个模组已启用
+          </small>
+        </div>
+        <label className="search">
+          <IconSearch />
+          <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="搜索名称、id、作者或说明…" />
+        </label>
         <div className="row">
-          <button className="primary" onClick={add}>
-            安装 .kmod
-          </button>
+          <button className="primary" onClick={add}>安装 .kmod</button>
           <button onClick={addFolder}>安装文件夹</button>
-          <button onClick={() => api.openPath("mods")}>打开 mods 文件夹</button>
+          <button onClick={() => api.openPath("mods")}>Mods 文件夹</button>
         </div>
       </div>
       {!state?.installed && <p className="muted">加载器还没有安装，模组在安装后才会生效。</p>}
       {mods === null && <p className="muted">正在读取…</p>}
       {mods?.length === 0 && <p className="muted">还没有模组。把 .kmod 文件装进来，或者放进 mods 文件夹。</p>}
       <div className="list">
-        {mods?.map((m) => (
+        {shown?.map((m) => (
           <div key={m.file} className="mod">
-            <label className="switch">
-              <input type="checkbox" checked={m.enabled} onChange={() => toggle(m)} />
-              <i />
-            </label>
+            <button className={m.enabled ? "pill on" : "pill"} onClick={() => toggle(m)}>
+              {m.enabled ? "已启用" : "已禁用"}
+            </button>
             <div className="info">
               <div>
                 <b>{m.name}</b>
-                <span className="muted small">
-                  {" "}
-                  {m.version} {m.author && `· ${m.author}`}
-                </span>
-                {m.kind === "folder" && <span className="tag">文件夹</span>}
+                <span className="muted small"> {m.version}</span>
+                {m.author && <span className="chip">{m.author}</span>}
+                {m.kind === "folder" && <span className="chip">文件夹</span>}
               </div>
               <div className="muted small">{m.description || m.id}</div>
             </div>
-            <button className="danger" onClick={() => remove(m)}>
-              删除
-            </button>
+            <button className="ghost danger" onClick={() => remove(m)}>删除</button>
           </div>
         ))}
       </div>
