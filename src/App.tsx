@@ -7,6 +7,7 @@ import Loader from "./pages/Loader";
 import Mods from "./pages/Mods";
 import Logs from "./pages/Logs";
 import Settings from "./pages/Settings";
+import Installer from "./pages/Installer";
 import TitleBar from "./TitleBar";
 import { allThemes, applyTheme } from "./themes";
 import { IconHome, IconLoader, IconMods, IconLogs, IconSettings } from "./Icons";
@@ -163,7 +164,7 @@ function Inner() {
           </nav>
           <main className="content">
             {page === "home" && <Home {...shared} />}
-            {page === "loader" && <Loader {...shared} />}
+            {page === "loader" && (android ? <Installer {...shared} /> : <Loader {...shared} />)}
             {page === "mods" && <Mods {...shared} />}
             {page === "logs" && <Logs {...shared} />}
             {page === "settings" && <Settings {...shared} />}

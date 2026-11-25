@@ -20,7 +20,7 @@ android {
     defaultConfig {
         manifestPlaceholders["usesCleartextTraffic"] = "false"
         applicationId = "team.ccb.kmod_launcher"
-        minSdk = 24
+        minSdk = 26
         targetSdk = 37
         versionCode = tauriProperties.getProperty("tauri.android.versionCode", "1").toInt()
         versionName = tauriProperties.getProperty("tauri.android.versionName", "1.0")
@@ -70,6 +70,10 @@ rust {
 }
 
 dependencies {
+    // the built-in kmod installer: patch classes.dex, then sign the APK
+    implementation("com.android.tools.smali:smali-dexlib2:3.0.9")
+    implementation("com.android.tools.build:apksig:8.7.3")
+    implementation("com.google.guava:guava:33.4.0-android")
     implementation("androidx.webkit:webkit:1.14.0")
     implementation("androidx.appcompat:appcompat:1.7.1")
     implementation("androidx.activity:activity-ktx:1.10.1")

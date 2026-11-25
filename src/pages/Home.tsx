@@ -5,11 +5,11 @@ import type { Shared } from "../App";
 import GamePicker from "./GamePicker";
 import { IconFolder, IconLoader, IconPlay } from "../Icons";
 
-const Hero = ({ iconUrl, pickIcon, resetIcon }: Pick<Shared, "iconUrl" | "pickIcon" | "resetIcon">) => (
+const Hero = ({ iconUrl, pickIcon, resetIcon, platform }: Pick<Shared, "iconUrl" | "pickIcon" | "resetIcon" | "platform">) => (
   <div className="hero">
     <div className="hero-icon">
       <button className="iconbtn" title="点击更换图标" onClick={pickIcon}>
-        <img src={iconUrl || "/icon.png"} alt="" />
+        <img src={iconUrl || (platform === "android" ? "/icon-installer.png" : "/icon.png")} alt="" />
         <span>更换</span>
       </button>
       {iconUrl && (
@@ -56,13 +56,13 @@ export default function Home(p: Shared) {
     };
     return (
       <div className="page">
-        <Hero iconUrl={p.iconUrl} pickIcon={p.pickIcon} resetIcon={p.resetIcon} />
+        <Hero iconUrl={p.iconUrl} pickIcon={p.pickIcon} resetIcon={p.resetIcon} platform={p.platform} />
 
         <h2 className="sec"><IconPlay />游戏</h2>
         <div className="cards">
           <div className={a?.installed ? "pcard on" : "pcard"}>
             <b>{a?.installed ? `已安装${a.version ? " " + a.version : ""}` : "没有找到游戏"}</b>
-            <small>{a?.installed ? config.package : `没有找到 ${config.package}，先到「安装器」装打过补丁的 KARDS`}</small>
+            <small>{a?.installed ? config.package : `没有找到 ${config.package}，先到「安装器」给 KARDS 注入 kmod`}</small>
           </div>
           <button className="pcard action" onClick={launchA} disabled={!a?.installed}>
             <b>启动游戏</b>
@@ -99,7 +99,7 @@ export default function Home(p: Shared) {
           </button>
           <button className="pcard action" onClick={() => go("loader")}>
             <b>安装器</b>
-            <small>获取并安装 kmod 安装器</small>
+            <small>把 kmod 注入游戏</small>
           </button>
         </div>
       </div>
@@ -109,7 +109,7 @@ export default function Home(p: Shared) {
   if (!config.game_dir) {
     return (
       <div className="page">
-        <Hero iconUrl={p.iconUrl} pickIcon={p.pickIcon} resetIcon={p.resetIcon} />
+        <Hero iconUrl={p.iconUrl} pickIcon={p.pickIcon} resetIcon={p.resetIcon} platform={p.platform} />
         <h2 className="sec"><IconFolder />选择游戏路径</h2>
         <p className="muted">先选择 KARDS 的安装位置，之后就可以安装加载器、管理模组。</p>
         <GamePicker config={config} setConfig={p.setConfig} />
@@ -130,7 +130,7 @@ export default function Home(p: Shared) {
 
   return (
     <div className="page">
-      <Hero iconUrl={p.iconUrl} pickIcon={p.pickIcon} resetIcon={p.resetIcon} />
+      <Hero iconUrl={p.iconUrl} pickIcon={p.pickIcon} resetIcon={p.resetIcon} platform={p.platform} />
 
       <h2 className="sec"><IconFolder />游戏路径</h2>
       <div className="row grow-row">

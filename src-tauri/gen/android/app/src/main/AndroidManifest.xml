@@ -8,6 +8,10 @@
     <!-- hand the kmod installer APK to the system installer -->
     <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
 
+    <!-- the built-in installer lists installed Unreal games, replaces the original and installs the injected one -->
+    <uses-permission android:name="android.permission.QUERY_ALL_PACKAGES" />
+    <uses-permission android:name="android.permission.REQUEST_DELETE_PACKAGES" />
+
     <!-- see / launch the patched game -->
     <queries>
         <package android:name="com.android1939.kardsapk" />
@@ -20,6 +24,7 @@
         android:icon="@mipmap/ic_launcher"
         android:label="@string/app_name"
         android:requestLegacyExternalStorage="true"
+        android:largeHeap="true"
         android:theme="@style/Theme.kmod_launcher"
         android:usesCleartextTraffic="${usesCleartextTraffic}">
         <activity

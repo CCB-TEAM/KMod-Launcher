@@ -130,6 +130,26 @@ pub async fn android_pick(app: AppHandle, exts: Vec<String>) -> Result<Vec<Strin
     blocking(move || android::pick(&app, &exts)).await
 }
 
+/// The built-in kmod installer (Android). Only these commands may be called.
+#[tauri::command]
+pub async fn android_installer(app: AppHandle, cmd: String, args: serde_json::Value) -> Result<serde_json::Value, String> {
+    const ALLOWED: [&str; 9] = [
+        "installerInfo",
+        "installerAllowInstall",
+        "installerScan",
+        "installerInspect",
+        "installerStart",
+        "installerStatus",
+        "installerUninstall",
+        "installerProceed",
+        "installerReset",
+    ];
+    if !ALLOWED.contains(&cmd.as_str()) {
+        return Err("未知的安装器命令".into());
+    }
+    blocking(move || android::installer(&app, &cmd, args)).await
+}
+
 #[tauri::command]
 pub async fn list_releases(app: AppHandle) -> Result<Vec<Release>, String> {
     let cfg = config::load(&app);
@@ -150,18 +170,6 @@ pub async fn install_loader(
     let prefix = format!("https://github.com/{}/releases/download/", net::REPO);
     if !url.starts_with(&prefix) {
         return Err("下载地址不是官方发布页".into());
-    }
-    if cfg!(target_os = "android") {
-        // The installer app: download the APK, then hand it to the system installer.
-        use tauri::Manager;
-        let cache = app.path().app_cache_dir().map_err(|e| e.to_string())?;
-        std::fs::create_dir_all(&cache).map_err(|e| e.to_string())?;
-        let dest = cache.join("kmod-installer.apk");
-        return blocking(move || {
-            let (path, _sha) = install::download(&app, &cfg, &url, size, dest)?;
-            android::install_apk(&app, &path.to_string_lossy())
-        })
-        .await;
     }
     let dir = paths::dirs(&app)?.game.ok_or("还没有选择游戏目录")?;
     if game_running() {

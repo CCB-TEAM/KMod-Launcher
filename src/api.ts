@@ -56,6 +56,32 @@ export interface AndroidInfo {
   version: string;
 }
 
+export interface UnrealApp {
+  label: string;
+  pkg: string;
+  path: string;
+  split: boolean;
+}
+
+export interface InspectReport {
+  ok: boolean;
+  facts: [string, string][];
+  warnings: string[];
+  errors: string[];
+  alreadyInjected: boolean;
+}
+
+export type Phase = "idle" | "working" | "need_uninstall" | "installing" | "done" | "error";
+
+export interface InstallerStatus {
+  phase: Phase;
+  text: string;
+  message: string;
+  pkg: string;
+  label: string;
+  size: number;
+}
+
 export type Platform = "windows" | "android";
 
 export type Folder = "game" | "kmod" | "mods" | "paks" | "logs";
@@ -64,6 +90,7 @@ export const api = {
   platform: () => invoke<Platform>("platform"),
   androidInfo: () => invoke<AndroidInfo>("android_info"),
   androidRequestAccess: () => invoke<void>("android_request_access"),
+  androidInstaller: <T>(cmd: string, args: Record<string, unknown> = {}) => invoke<T>("android_installer", { cmd, args }),
   androidPick: (exts: string[]) => invoke<string[]>("android_pick", { exts }),
   getConfig: () => invoke<Config>("get_config"),
   saveConfig: (config: Config) => invoke<Config>("save_config", { config }),

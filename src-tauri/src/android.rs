@@ -54,8 +54,9 @@ mod imp {
     pub fn open_url(app: &AppHandle, url: &str) -> Result<(), String> {
         call::<serde_json::Value>(app, "openUrl", json!({ "url": url })).map(|_| ())
     }
-    pub fn install_apk(app: &AppHandle, path: &str) -> Result<(), String> {
-        call::<serde_json::Value>(app, "installApk", json!({ "path": path })).map(|_| ())
+    /// Commands of the built-in installer (names are checked by the caller).
+    pub fn installer(app: &AppHandle, cmd: &str, args: serde_json::Value) -> Result<serde_json::Value, String> {
+        call(app, cmd, args)
     }
     #[derive(Deserialize)]
     struct Picked {
@@ -83,7 +84,7 @@ mod imp {
     pub fn open_url(_: &AppHandle, _: &str) -> Result<(), String> {
         Err(NO.into())
     }
-    pub fn install_apk(_: &AppHandle, _: &str) -> Result<(), String> {
+    pub fn installer(_: &AppHandle, _: &str, _: serde_json::Value) -> Result<serde_json::Value, String> {
         Err(NO.into())
     }
     pub fn pick(_: &AppHandle, _: &[String]) -> Result<Vec<String>, String> {

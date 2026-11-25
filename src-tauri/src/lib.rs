@@ -23,6 +23,7 @@ pub fn run() {
             commands::android_info,
             commands::android_request_access,
             commands::android_pick,
+            commands::android_installer,
             commands::get_config,
             commands::save_config,
             commands::detect_games,

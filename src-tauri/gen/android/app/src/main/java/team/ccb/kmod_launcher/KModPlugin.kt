@@ -17,6 +17,9 @@ import app.tauri.plugin.Invoke
 import app.tauri.plugin.JSArray
 import app.tauri.plugin.JSObject
 import app.tauri.plugin.Plugin
+import android.webkit.WebView
+import team.ccb.kmod_launcher.installer.Installer
+import org.json.JSONObject
 import java.io.File
 
 @InvokeArg
@@ -35,6 +38,20 @@ class PathArgs {
 }
 
 @InvokeArg
+class InspectArgs {
+    var path: String = ""
+    var split: Boolean = false
+}
+
+@InvokeArg
+class StartArgs {
+    var pkg: String = ""
+    var label: String = ""
+    var path: String = ""
+    var flavor: String = "release"
+}
+
+@InvokeArg
 class PickArgs {
     var exts: Array<String> = arrayOf()
 }
@@ -46,6 +63,10 @@ class PickArgs {
  */
 @TauriPlugin
 class KModPlugin(private val activity: Activity) : Plugin(activity) {
+
+    override fun load(webView: WebView) {
+        Installer.register(activity.applicationContext)
+    }
 
     private fun hasAccess(): Boolean =
         if (Build.VERSION.SDK_INT >= 30) Environment.isExternalStorageManager() else true
@@ -110,31 +131,6 @@ class KModPlugin(private val activity: Activity) : Plugin(activity) {
         }
     }
 
-    @Command
-    fun installApk(invoke: Invoke) {
-        val args = invoke.parseArgs(PathArgs::class.java)
-        if (Build.VERSION.SDK_INT >= 26 && !activity.packageManager.canRequestPackageInstalls()) {
-            try {
-                val i = Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES, Uri.parse("package:" + activity.packageName))
-                activity.startActivity(i)
-            } catch (e: Exception) {
-            }
-            invoke.reject("请先在系统设置里允许 KMod Launcher 安装其他应用，然后再点一次")
-            return
-        }
-        try {
-            val file = File(args.path)
-            val uri = FileProvider.getUriForFile(activity, activity.packageName + ".fileprovider", file)
-            val i = Intent(Intent.ACTION_VIEW)
-            i.setDataAndType(uri, "application/vnd.android.package-archive")
-            i.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_ACTIVITY_NEW_TASK)
-            activity.startActivity(i)
-            invoke.resolve()
-        } catch (e: Exception) {
-            invoke.reject("无法启动安装器：" + e.message)
-        }
-    }
-
     // ---- file picker ----
 
     private var wantedExts: List<String> = listOf()
@@ -190,4 +186,94 @@ class KModPlugin(private val activity: Activity) : Plugin(activity) {
         out.put("files", files)
         invoke.resolve(out)
     }
+
+    // ---- built-in kmod installer (see installer/Installer.java) ----
+
+    private fun obj(j: JSONObject): JSObject {
+        val o = JSObject()
+        val it = j.keys()
+        while (it.hasNext()) {
+            val k = it.next()
+            o.put(k, j.get(k))
+        }
+        return o
+    }
+
+    @Command
+    fun installerInfo(invoke: Invoke) {
+        val o = JSObject()
+        o.put("flavors", Installer.flavors(activity))
+        o.put("canInstall", Installer.canInstall(activity))
+        invoke.resolve(o)
+    }
+
+    @Command
+    fun installerAllowInstall(invoke: Invoke) {
+        try {
+            activity.startActivity(Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES, Uri.parse("package:" + activity.packageName)))
+            invoke.resolve()
+        } catch (e: Exception) {
+            invoke.reject("打不开系统设置：" + e.message)
+        }
+    }
+
+    @Command
+    fun installerScan(invoke: Invoke) {
+        Thread {
+            try {
+                val o = JSObject()
+                o.put("apps", Installer.scan(activity))
+                invoke.resolve(o)
+            } catch (e: Throwable) {
+                invoke.reject("查找失败：" + e)
+            }
+        }.start()
+    }
+
+    @Command
+    fun installerInspect(invoke: Invoke) {
+        val args = invoke.parseArgs(InspectArgs::class.java)
+        Thread {
+            try {
+                invoke.resolve(obj(Installer.inspect(args.path, args.split)))
+            } catch (e: Throwable) {
+                invoke.reject("检查失败：" + e)
+            }
+        }.start()
+    }
+
+    @Command
+    fun installerStart(invoke: Invoke) {
+        val args = invoke.parseArgs(StartArgs::class.java)
+        if (!Installer.canInstall(activity)) {
+            invoke.reject("请先允许 KMod Launcher 安装其他应用")
+            return
+        }
+        Installer.start(activity.applicationContext, args.pkg, args.label, args.path, args.flavor)
+        invoke.resolve()
+    }
+
+    @Command
+    fun installerStatus(invoke: Invoke) {
+        invoke.resolve(obj(Installer.status()))
+    }
+
+    @Command
+    fun installerUninstall(invoke: Invoke) {
+        Installer.uninstall(activity)
+        invoke.resolve()
+    }
+
+    @Command
+    fun installerProceed(invoke: Invoke) {
+        Installer.proceed(activity.applicationContext)
+        invoke.resolve()
+    }
+
+    @Command
+    fun installerReset(invoke: Invoke) {
+        Installer.reset()
+        invoke.resolve()
+    }
 }
+
