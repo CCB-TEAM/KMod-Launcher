@@ -39,8 +39,9 @@ android {
             }
         }
         getByName("release") {
+            // R8 is off: the installer's libraries (dexlib2, guava, apksig) are used reflectively enough to make shrinking risky
             optimization {
-               enable = true
+               enable = false
             }
             proguardFiles(
                 *fileTree(".") {

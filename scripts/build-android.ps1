@@ -46,4 +46,23 @@ try {
     ./gradlew.bat $task -PkmodPrebuiltRust=true --console=plain
     if ($LASTEXITCODE) { throw 'Gradle build failed' }
 } finally { Pop-Location }
-Write-Host "APK: $project/app/build/outputs/apk/arm64/$profile"
+$outDir = "$project/app/build/outputs/apk/arm64/$profile"
+if ($Release) {
+    # Gradle leaves the release APK unsigned: align it and sign it with release.keystore (alias and password in release-key.txt, both git-ignored; back them up,
+    # an app signed with another key cannot update an installed one).
+    $bt = (Get-ChildItem "$env:ANDROID_HOME/build-tools" | Sort-Object Name -Descending | Select-Object -First 1).FullName
+    $kv = @{}; Get-Content "$repo/release-key.txt" | ForEach-Object { $p = $_ -split '=', 2; if ($p.Count -eq 2) { $kv[$p[0]] = $p[1] } }
+    $unsigned = Get-ChildItem $outDir -Filter '*unsigned.apk' | Select-Object -First 1
+    if (!$unsigned) { throw "No unsigned release APK in $outDir" }
+    $aligned = Join-Path $outDir 'aligned.apk'
+    $final = Join-Path $outDir 'kmod-launcher-release.apk'
+    Remove-Item $aligned, $final -ErrorAction SilentlyContinue
+    & "$bt/zipalign.exe" -p -f 4 $unsigned.FullName $aligned
+    if ($LASTEXITCODE) { throw 'zipalign failed' }
+    & "$bt/apksigner.bat" sign --ks "$repo/release.keystore" --ks-pass "pass:$($kv['password'])" --key-pass "pass:$($kv['password'])" --ks-key-alias $kv['alias'] --out $final $aligned
+    if ($LASTEXITCODE) { throw 'apksigner failed' }
+    Remove-Item $aligned
+    Write-Host "APK: $final"
+} else {
+    Write-Host "APK: $outDir"
+}
