@@ -3,7 +3,8 @@ import { api, errText, fmtSize, onProgress, type Asset, type Progress, type Rele
 import { useToast } from "../toast";
 import type { Shared } from "../App";
 
-export default function Loader({ config, setConfig, state, refresh }: Shared) {
+export default function Loader({ config, setConfig, state, refresh, platform }: Shared) {
+  const android = platform === "android";
   const toast = useToast();
   const [releases, setReleases] = useState<Release[] | null>(null);
   const [error, setError] = useState("");
@@ -34,7 +35,7 @@ export default function Loader({ config, setConfig, state, refresh }: Shared) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [config.prereleases]);
 
-  const flavor = config.flavor;
+  const flavor = android ? "release" : config.flavor;
   const pick = (r: Release) => r.assets.find((a) => a.flavor === flavor);
 
   const run = async (a: Asset, tag: string, replaceForeign = false) => {
@@ -42,7 +43,7 @@ export default function Loader({ config, setConfig, state, refresh }: Shared) {
     setProgress({ stage: "download", done: 0, total: a.size });
     try {
       await api.installLoader(a, tag, replaceForeign);
-      toast("ok", `已安装 ${tag}`);
+      toast("ok", android ? "已交给系统安装器，按提示完成安装" : `已安装 ${tag}`);
       await refresh();
     } catch (e) {
       const t = errText(e);
@@ -70,12 +71,17 @@ export default function Loader({ config, setConfig, state, refresh }: Shared) {
 
   return (
     <div className="page">
-      <h1>加载器</h1>
+      <h1>{android ? "安装器" : "加载器"}</h1>
+      {android && (
+        <p className="muted">
+          手机上的 KMod 加载器通过“kmod 安装器”注入游戏：下载安装器，装好后在安装器里选 KARDS，按提示卸载原版并安装注入后的版本。
+        </p>
+      )}
 
       <section className="card">
         <div className="between">
-          <h2>安装的版本</h2>
-          <div className="seg">
+          <h2>{android ? "安装器" : "安装的版本"}</h2>
+          <div className="seg" hidden={android}>
             {(["release", "dev"] as const).map((f) => (
               <button key={f} className={flavor === f ? "on" : ""} onClick={() => setConfig({ ...config, flavor: f })}>
                 {f === "release" ? "正式版" : "开发版"}
@@ -84,10 +90,14 @@ export default function Loader({ config, setConfig, state, refresh }: Shared) {
           </div>
         </div>
         <p className="muted">
-          {state?.installed
+          {android
+            ? state?.installed
+              ? `已找到 kmod 文件夹${state.log_version ? `，加载器 ${state.log_version}` : ""}。`
+              : "还没有找到 kmod 文件夹（装好游戏并启动一次后会出现）。"
+            : state?.installed
             ? `当前：${state.tag || state.log_version || "未知版本"}（${state.flavor === "dev" ? "开发版" : state.flavor === "release" ? "正式版" : "来源未知"}）`
             : "未安装"}
-          {flavor === "dev" && "　开发版会多开一个控制台窗口，写模组时用。"}
+          {!android && flavor === "dev" && "　开发版会多开一个控制台窗口，写模组时用。"}
         </p>
         {busy && (
           <div className="bar">
@@ -100,10 +110,10 @@ export default function Loader({ config, setConfig, state, refresh }: Shared) {
         <div className="row">
           {latest && (
             <button className="primary" disabled={busy} onClick={() => run(pick(latest)!, latest.tag)}>
-              {!state?.installed ? `安装 ${latest.tag}` : upToDate ? `重新安装 ${latest.tag}` : `更新到 ${latest.tag}`}
+              {android ? `下载并安装 ${latest.tag}` : !state?.installed ? `安装 ${latest.tag}` : upToDate ? `重新安装 ${latest.tag}` : `更新到 ${latest.tag}`}
             </button>
           )}
-          {state?.installed && (
+          {!android && state?.installed && (
             <>
               <button disabled={busy} onClick={() => uninstall(false)}>
                 卸载（保留模组和数据）
@@ -138,9 +148,9 @@ export default function Loader({ config, setConfig, state, refresh }: Shared) {
 
       <section className="card">
         <div className="between">
-          <h2>所有版本</h2>
+          <h2>{android ? "可用版本" : "所有版本"}</h2>
           <div className="row">
-            <label className="check">
+            <label className="check" hidden={android}>
               <input type="checkbox" checked={config.prereleases} onChange={(e) => setConfig({ ...config, prereleases: e.target.checked })} />
               包含预发布
             </label>
@@ -174,7 +184,7 @@ export default function Loader({ config, setConfig, state, refresh }: Shared) {
           );
         })}
         <div className="row">
-          <button onClick={() => api.openUrl("https://github.com/CCB-TEAM/KMod-Loader-Windows/releases")}>在 GitHub 打开</button>
+          <button onClick={() => api.openUrl(android ? "https://github.com/CCB-TEAM/KMod-Loader-Android/releases" : "https://github.com/CCB-TEAM/KMod-Loader-Windows/releases")}>在 GitHub 打开</button>
         </div>
       </section>
     </div>

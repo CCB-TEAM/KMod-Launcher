@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
-import { open } from "@tauri-apps/plugin-dialog";
-import { api, errText, type Config, type InstallState } from "./api";
+import { api, errText, type AndroidInfo, type Config, type InstallState, type Platform } from "./api";
+import { pickFiles } from "./pick";
 import { ToastHost, useToast } from "./toast";
 import Home from "./pages/Home";
 import Loader from "./pages/Loader";
@@ -26,6 +26,10 @@ export interface Shared {
   state: InstallState | null;
   refresh: () => Promise<void>;
   go: (p: PageId) => void;
+  platform: Platform;
+  /** Android only: permission and game status. */
+  ainfo: AndroidInfo | null;
+  refreshAndroid: () => Promise<void>;
   /** Custom icon as a data URL; the built-in icon when empty. */
   iconUrl: string;
   pickIcon: () => Promise<void>;
@@ -47,21 +51,54 @@ function Inner() {
   const [config, setCfg] = useState<Config | null>(null);
   const [state, setState] = useState<InstallState | null>(null);
   const [fatal, setFatal] = useState("");
+  const [platform, setPlatform] = useState<Platform | "">("");
+  const [ainfo, setAinfo] = useState<AndroidInfo | null>(null);
+  const [narrow, setNarrow] = useState(window.innerWidth < 760);
+
+  useEffect(() => {
+    const on = () => setNarrow(window.innerWidth < 760);
+    window.addEventListener("resize", on);
+    return () => window.removeEventListener("resize", on);
+  }, []);
 
   const refresh = useCallback(async () => {
     try {
+      const p = await api.platform();
+      setPlatform(p);
       const c = await api.getConfig();
       setCfg(c);
-      setState(c.game_dir ? await api.getInstalled() : null);
+      setState(p === "android" || c.game_dir ? await api.getInstalled() : null);
     } catch (e) {
       setState(null);
       setFatal(errText(e));
     }
   }, []);
 
+  const refreshAndroid = useCallback(async () => {
+    try {
+      setAinfo(await api.androidInfo());
+    } catch {
+      setAinfo(null);
+    }
+  }, []);
+
   useEffect(() => {
     void refresh();
   }, [refresh]);
+
+  // Android: re-check permission and game when coming back from the system settings / installer.
+  useEffect(() => {
+    if (platform !== "android") return;
+    void refreshAndroid();
+    const on = () => {
+      if (document.visibilityState === "visible") {
+        void refreshAndroid();
+        void refresh();
+      }
+    };
+    document.addEventListener("visibilitychange", on);
+    return () => document.removeEventListener("visibilitychange", on);
+  }, [platform, refreshAndroid, refresh]);
 
   useEffect(() => {
     if (!config) return;
@@ -74,9 +111,9 @@ function Inner() {
   }, []);
 
   const pickIcon = async () => {
-    const f = await open({ title: "选择图标", filters: [{ name: "图标 (PNG / ICO)", extensions: ["png", "ico"] }] });
-    if (typeof f !== "string") return;
     try {
+      const [f] = await pickFiles(platform as Platform, { title: "选择图标", name: "图标 (PNG / ICO)", exts: ["png", "ico"] });
+      if (!f) return;
       await api.setIcon(f);
       setIconUrl((await api.getIcon()) ?? "");
       toast("ok", "图标已更换");
@@ -99,17 +136,20 @@ function Inner() {
     await refresh();
   };
 
-  if (!config) return <div className="boot">{fatal || "正在加载…"}</div>;
-  const shared: Shared = { config, setConfig, state, refresh, go: setPage, iconUrl, pickIcon, resetIcon };
-  const needGame = !config.game_dir;
+  if (!config || !platform) return <div className="boot">{fatal || "正在加载…"}</div>;
+  const shared: Shared = { config, setConfig, state, refresh, go: setPage, platform, ainfo, refreshAndroid, iconUrl, pickIcon, resetIcon };
+  const android = platform === "android";
+  const needGame = !android && !config.game_dir;
+  const compact = android || narrow;
+  const pages = PAGES.map((p) => (p.id === "loader" && android ? { ...p, label: "安装器" } : p));
 
   return (
     <>
-      <div className="shell">
-        <TitleBar iconUrl={iconUrl} />
+      <div className={compact ? "shell compact" : "shell"} data-platform={platform}>
+        {!android && <TitleBar iconUrl={iconUrl} />}
         <div className="app">
           <nav className="side">
-            {PAGES.map(({ id, label, Icon }) => (
+            {pages.map(({ id, label, Icon }) => (
               <button
                 key={id}
                 className={page === id ? "nav active" : "nav"}

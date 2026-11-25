@@ -25,6 +25,10 @@ fn kind_of(bytes: &[u8]) -> Option<(&'static str, &'static str)> {
 }
 
 /// Puts the saved icon on the window; called at start and after a change.
+#[cfg(mobile)]
+pub fn apply(_app: &AppHandle) {}
+
+#[cfg(desktop)]
 pub fn apply(app: &AppHandle) {
     let cfg = config::load(app);
     let Some(win) = app.get_webview_window("main") else { return };

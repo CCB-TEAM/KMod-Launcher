@@ -8,8 +8,8 @@ use std::path::{Path, PathBuf};
 const EXTS: [&str; 4] = ["pak", "utoc", "ucas", "sig"];
 const OFF: &str = ".disable";
 
-/// `...\kards\Binaries\Win64` -> `...\kards\Content\Paks`
-pub fn paks_dir(win64: &Path) -> Option<PathBuf> {
+/// Windows: `...\kards\Binaries\Win64` -> `...\kards\Content\Paks`
+pub fn windows_paks_dir(win64: &Path) -> Option<PathBuf> {
     let kards = win64.parent()?.parent()?;
     Some(kards.join("Content").join("Paks"))
 }
@@ -40,9 +40,9 @@ fn size_text(bytes: u64) -> String {
     }
 }
 
-pub fn list(win64: &Path) -> Vec<ModInfo> {
+pub fn list(paks: &Path) -> Vec<ModInfo> {
     let mut out = Vec::new();
-    let Some(dir) = paks_dir(win64) else { return out };
+    let dir = paks.to_path_buf();
     let Ok(rd) = std::fs::read_dir(&dir) else { return out };
     for e in rd.flatten() {
         if !e.path().is_file() {
@@ -77,6 +77,7 @@ pub fn list(win64: &Path) -> Vec<ModInfo> {
             kind: "pak".into(),
             pack: "pak".into(),
             file: stem,
+            pending: false,
         });
     }
     out.sort_by(|a, b| a.name.to_lowercase().cmp(&b.name.to_lowercase()));
@@ -102,11 +103,11 @@ fn rename_all(files: Vec<PathBuf>, to_disabled: bool) -> Result<(), String> {
     Ok(())
 }
 
-pub fn set_enabled(win64: &Path, stem: &str, enabled: bool) -> Result<(), String> {
+pub fn set_enabled(paks: &Path, stem: &str, enabled: bool) -> Result<(), String> {
     if !valid_stem(stem) || is_base_game(stem) {
         return Err("Pak 名字不合法".into());
     }
-    let dir = paks_dir(win64).ok_or("找不到 Paks 文件夹")?;
+    let dir = paks.to_path_buf();
     let files = set_files(&dir, stem, !enabled);
     if files.is_empty() {
         return Ok(());
@@ -114,11 +115,11 @@ pub fn set_enabled(win64: &Path, stem: &str, enabled: bool) -> Result<(), String
     rename_all(files, !enabled)
 }
 
-pub fn delete(win64: &Path, stem: &str) -> Result<(), String> {
+pub fn delete(paks: &Path, stem: &str) -> Result<(), String> {
     if !valid_stem(stem) || is_base_game(stem) {
         return Err("Pak 名字不合法".into());
     }
-    let dir = paks_dir(win64).ok_or("找不到 Paks 文件夹")?;
+    let dir = paks.to_path_buf();
     for on in [true, false] {
         for f in set_files(&dir, stem, on) {
             std::fs::remove_file(&f).map_err(|e| format!("{}：{e}", f.display()))?;
@@ -128,7 +129,7 @@ pub fn delete(win64: &Path, stem: &str) -> Result<(), String> {
 }
 
 /// Copies a `.pak` and its `.utoc` / `.ucas` / `.sig` siblings into the Paks folder (enabled).
-pub fn install(win64: &Path, source: &str) -> Result<String, String> {
+pub fn install(paks: &Path, source: &str) -> Result<String, String> {
     let src = PathBuf::from(source);
     let stem = src
         .file_stem()
@@ -139,7 +140,7 @@ pub fn install(win64: &Path, source: &str) -> Result<String, String> {
     if is_base_game(&stem) {
         return Err("不能覆盖游戏本体的 pak".into());
     }
-    let dir = paks_dir(win64).ok_or("找不到 Paks 文件夹")?;
+    let dir = paks.to_path_buf();
     std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
     let from = src.parent().ok_or("路径不对")?;
     let mut n = 0;

@@ -48,9 +48,9 @@ fn read_marker(win64: &Path) -> Option<Installed> {
     serde_json::from_str(s.trim_start_matches('\u{feff}')).ok()
 }
 
-fn log_version(win64: &Path) -> String {
+pub fn log_version(kmod: &Path) -> String {
     // First line of kmod.log: "=== kmod loader 0.3.0 (release, Windows) started ==="
-    let Ok(s) = std::fs::read_to_string(kmod_dir(win64).join("logs").join("kmod.log")) else {
+    let Ok(s) = std::fs::read_to_string(kmod.join("logs").join("kmod.log")) else {
         return String::new();
     };
     let line = s.lines().find(|l| l.contains("kmod loader")).unwrap_or("");
@@ -68,7 +68,7 @@ pub fn state(win64: &Path) -> InstallState {
         installed: proxy && core,
         tag: m.tag,
         flavor: m.flavor,
-        log_version: log_version(win64),
+        log_version: log_version(&kmod_dir(win64)),
         foreign_proxy: proxy && !core,
     }
 }
@@ -81,8 +81,7 @@ fn io_msg(e: std::io::Error, what: &Path) -> String {
     }
 }
 
-fn download(app: &AppHandle, cfg: &Config, url: &str, size_hint: u64) -> Result<(PathBuf, String), String> {
-    let tmp = std::env::temp_dir().join(format!("kmod-launcher-{}.zip", std::process::id()));
+pub fn download(app: &AppHandle, cfg: &Config, url: &str, size_hint: u64, tmp: PathBuf) -> Result<(PathBuf, String), String> {
     let resp = net::agent(cfg)
         .get(&net::mirrored(cfg, url))
         .call()
@@ -153,7 +152,7 @@ pub fn install(
         }
     }
     emit(app, "download", 0, size);
-    let (zip_path, sha) = download(app, cfg, url, size)?;
+    let (zip_path, sha) = download(app, cfg, url, size, std::env::temp_dir().join(format!("kmod-launcher-{}.zip", std::process::id())))?;
     let result = (|| {
         emit(app, "extract", 0, 0);
         let file = std::fs::File::open(&zip_path).map_err(|e| e.to_string())?;

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { open } from "@tauri-apps/plugin-dialog";
+import { pickFiles } from "../pick";
 import { api, errText, type ModInfo } from "../api";
 import { useToast } from "../toast";
 import type { Shared } from "../App";
@@ -7,7 +8,8 @@ import { IconSearch } from "../Icons";
 
 const KIND_LABEL = { lua: "Lua", native: "原生 C++", pak: "Pak" } as const;
 
-export default function Mods({ state }: Shared) {
+export default function Mods({ state, platform }: Shared) {
+  const android = platform === "android";
   const toast = useToast();
   const [mods, setMods] = useState<ModInfo[] | null>(null);
   const [q, setQ] = useState("");
@@ -36,9 +38,14 @@ export default function Mods({ state }: Shared) {
   };
 
   const add = async () => {
-    const f = await open({ multiple: true, title: "选择模组", filters: [{ name: "KMod 模组 / Pak", extensions: ["kmod", "pak"] }] });
-    if (!f) return;
-    for (const path of Array.isArray(f) ? f : [f]) {
+    let files: string[] = [];
+    try {
+      files = await pickFiles(platform, { multiple: true, title: "选择模组", name: "KMod 模组 / Pak", exts: ["kmod", "pak"] });
+    } catch (e) {
+      toast("err", errText(e));
+      return;
+    }
+    for (const path of files) {
       try {
         toast("ok", `已安装 ${await api.installMod(path)}`);
       } catch (e) {
@@ -62,7 +69,7 @@ export default function Mods({ state }: Shared) {
   const remove = async (m: ModInfo) => {
     if (!confirm(`删除模组“${m.name}”？`)) return;
     try {
-      await api.deleteMod(m.file, m.id, m.kind);
+      await api.deleteMod(m.file, m.id, m.kind, m.pending);
       await load();
     } catch (e) {
       toast("err", errText(e));
@@ -91,9 +98,9 @@ export default function Mods({ state }: Shared) {
         </label>
         <div className="row">
           <button className="primary" onClick={add}>安装模组</button>
-          <button onClick={addFolder}>安装文件夹</button>
-          <button onClick={() => api.openPath("mods")}>Mods 文件夹</button>
-          <button onClick={() => api.openPath("paks")}>Paks 文件夹</button>
+          {!android && <button onClick={addFolder}>安装文件夹</button>}
+          {!android && <button onClick={() => api.openPath("mods")}>Mods 文件夹</button>}
+          {!android && <button onClick={() => api.openPath("paks")}>Paks 文件夹</button>}
         </div>
       </div>
       <div className="seg types">
@@ -102,13 +109,16 @@ export default function Mods({ state }: Shared) {
         <button className={type === "native" ? "on" : ""} onClick={() => setType("native")}>原生 {count("native")}</button>
         <button className={type === "pak" ? "on" : ""} onClick={() => setType("pak")}>Pak {count("pak")}</button>
       </div>
-      {!state?.installed && <p className="muted">加载器还没有安装，Lua 和原生模组在安装后才会生效（Pak 模组由游戏自己加载，不依赖加载器）。</p>}
+      {android && platform === "android" && !state?.installed && (
+        <p className="muted">还没有找到 kmod 文件夹：先在「安装器」里装好打过补丁的游戏并启动一次，再回来管理模组。</p>
+      )}
+      {!android && !state?.installed && <p className="muted">加载器还没有安装，Lua 和原生模组在安装后才会生效（Pak 模组由游戏自己加载，不依赖加载器）。</p>}
       {mods === null && <p className="muted">正在读取…</p>}
-      {mods?.length === 0 && <p className="muted">还没有模组。把 .kmod 文件装进来，或者放进 mods 文件夹。</p>}
+      {mods?.length === 0 && <p className="muted">还没有模组。点「安装模组」选一个 .kmod 或 .pak 文件。</p>}
       <div className="list">
         {shown?.map((m) => (
           <div key={`${m.kind}:${m.file}`} className={`mod k-${m.kind}`}>
-            <button className={m.enabled ? "pill on" : "pill"} onClick={() => toggle(m)}>
+            <button className={m.enabled ? "pill on" : "pill"} onClick={() => toggle(m)} disabled={m.pending}>
               {m.enabled ? "已启用" : "已禁用"}
             </button>
             <div className="info">
@@ -118,6 +128,7 @@ export default function Mods({ state }: Shared) {
                 <span className="muted small"> {m.version}</span>
                 {m.author && <span className="chip">{m.author}</span>}
                 {m.pack === "folder" && <span className="chip">文件夹</span>}
+                {m.pending && <span className="chip wait">下次启动游戏时安装</span>}
               </div>
               <div className="muted small">{m.description || m.id}</div>
             </div>
@@ -125,7 +136,9 @@ export default function Mods({ state }: Shared) {
           </div>
         ))}
       </div>
-      <p className="muted small">Lua / 原生模组的启用状态在下次启动游戏时生效，游戏里的 Mods 页也可以即时切换；Pak 模组要在游戏关闭时启用、停用或删除。</p>
+      <p className="muted small">{android
+          ? "Lua / 原生模组在下次启动游戏时生效，游戏里的 Mods 页也可以即时切换；Pak 模组的启用、停用、删除要在游戏关闭时进行，改完需重启游戏。"
+          : "Lua / 原生模组的启用状态在下次启动游戏时生效，游戏里的 Mods 页也可以即时切换；Pak 模组要在游戏关闭时启用、停用或删除。"}</p>
     </div>
   );
 }

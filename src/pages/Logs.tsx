@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { api, errText } from "../api";
 import type { Shared } from "../App";
 
-export default function Logs(_: Shared) {
+export default function Logs({ platform }: Shared) {
   const [which, setWhich] = useState<"kmod" | "proxy">("kmod");
   const [text, setText] = useState("");
   const [auto, setAuto] = useState(true);
@@ -38,15 +38,17 @@ export default function Logs(_: Shared) {
             <button className={which === "kmod" ? "on" : ""} onClick={() => setWhich("kmod")}>
               kmod.log
             </button>
-            <button className={which === "proxy" ? "on" : ""} onClick={() => setWhich("proxy")}>
-              proxy.log
-            </button>
+            {platform !== "android" && (
+              <button className={which === "proxy" ? "on" : ""} onClick={() => setWhich("proxy")}>
+                proxy.log
+              </button>
+            )}
           </div>
           <label className="check">
             <input type="checkbox" checked={auto} onChange={(e) => setAuto(e.target.checked)} />
             自动刷新
           </label>
-          <button onClick={() => api.openPath("logs")}>打开日志文件夹</button>
+          {platform !== "android" && <button onClick={() => api.openPath("logs")}>打开日志文件夹</button>}
         </div>
       </div>
       {err && <p className="err">{err}</p>}

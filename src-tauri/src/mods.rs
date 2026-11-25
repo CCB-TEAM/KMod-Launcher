@@ -1,4 +1,3 @@
-use crate::game::kmod_dir;
 use serde::Serialize;
 use serde_json::{json, Value};
 use std::io::Read;
@@ -18,18 +17,20 @@ pub struct ModInfo {
     pub pack: String,
     /// File or folder name inside kmod\mods
     pub file: String,
+    /// Waiting in the inbox: the loader installs it on the next game start (Android).
+    pub pending: bool,
 }
 
-fn mods_dir(win64: &Path) -> PathBuf {
-    kmod_dir(win64).join("mods")
+fn mods_dir(kmod: &Path) -> PathBuf {
+    kmod.join("mods")
 }
 
-fn state_path(win64: &Path) -> PathBuf {
-    kmod_dir(win64).join("state.json")
+fn state_path(kmod: &Path) -> PathBuf {
+    kmod.join("state.json")
 }
 
-fn read_state(win64: &Path) -> Value {
-    std::fs::read_to_string(state_path(win64))
+fn read_state(kmod: &Path) -> Value {
+    std::fs::read_to_string(state_path(kmod))
         .ok()
         .and_then(|s| serde_json::from_str(s.trim_start_matches('\u{feff}')).ok())
         .unwrap_or_else(|| json!({}))
@@ -57,11 +58,16 @@ fn manifest_of_kmod(path: &Path) -> Option<Value> {
     parse_manifest(&s)
 }
 
-/// A mod is native on Windows when `native` is a string, or an object that has a `Windows` entry.
+#[cfg(target_os = "android")]
+const PLATFORM_KEY: &str = "Android";
+#[cfg(not(target_os = "android"))]
+const PLATFORM_KEY: &str = "Windows";
+
+/// A mod is native here when `native` is a string, or an object that has an entry for this platform.
 fn is_native(m: &Value) -> bool {
     match &m["native"] {
         Value::String(s) => !s.is_empty(),
-        Value::Object(o) => o.get("Windows").map(|v| v.as_str().map(|s| !s.is_empty()).unwrap_or(false)).unwrap_or(false),
+        Value::Object(o) => o.get(PLATFORM_KEY).and_then(|v| v.as_str()).map(|s| !s.is_empty()).unwrap_or(false),
         _ => false,
     }
 }
@@ -79,13 +85,14 @@ fn info(m: &Value, enabled: &[String], pack: &str, file: String) -> ModInfo {
         kind: if is_native(m) { "native" } else { "lua" }.into(),
         pack: pack.into(),
         file,
+        pending: false,
     }
 }
 
-pub fn list(win64: &Path) -> Vec<ModInfo> {
-    let enabled = enabled_ids(&read_state(win64));
+pub fn list(kmod: &Path) -> Vec<ModInfo> {
+    let enabled = enabled_ids(&read_state(kmod));
     let mut out = Vec::new();
-    let Ok(rd) = std::fs::read_dir(mods_dir(win64)) else { return out };
+    let Ok(rd) = std::fs::read_dir(mods_dir(kmod)) else { return out };
     for e in rd.flatten() {
         let p = e.path();
         let file = e.file_name().to_string_lossy().to_string();
@@ -99,6 +106,20 @@ pub fn list(win64: &Path) -> Vec<ModInfo> {
             }
         }
     }
+    // .kmod packages waiting in the inbox (Android installs them when the game starts)
+    if let Ok(rd) = std::fs::read_dir(kmod.join("inbox")) {
+        for e in rd.flatten() {
+            let file = e.file_name().to_string_lossy().to_string();
+            if !file.to_lowercase().ends_with(".kmod") {
+                continue;
+            }
+            if let Some(m) = manifest_of_kmod(&e.path()) {
+                let mut i = info(&m, &enabled, "kmod", file);
+                i.pending = true;
+                out.push(i);
+            }
+        }
+    }
     out.sort_by(|a, b| a.name.to_lowercase().cmp(&b.name.to_lowercase()));
     out
 }
@@ -107,27 +128,27 @@ fn valid_id(id: &str) -> bool {
     !id.is_empty() && id.chars().all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '-' || c == '.')
 }
 
-pub fn set_enabled(win64: &Path, id: &str, enabled: bool) -> Result<(), String> {
+pub fn set_enabled(kmod: &Path, id: &str, enabled: bool) -> Result<(), String> {
     if !valid_id(id) {
         return Err("模组 id 不合法".into());
     }
-    let mut state = read_state(win64);
+    let mut state = read_state(kmod);
     let mut ids = enabled_ids(&state);
     ids.retain(|x| x != id);
     if enabled {
         ids.push(id.to_string());
     }
     state["enabled"] = json!(ids);
-    let dir = kmod_dir(win64);
+    let dir = kmod.to_path_buf();
     std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
     let text = serde_json::to_string(&state).map_err(|e| e.to_string())?;
-    std::fs::write(state_path(win64), text).map_err(|e| e.to_string())
+    std::fs::write(state_path(kmod), text).map_err(|e| e.to_string())
 }
 
 /// Copies a `.kmod` file or a mod folder into kmod\mods. Returns the mod's name.
-pub fn install(win64: &Path, source: &str) -> Result<String, String> {
+pub fn install(kmod: &Path, source: &str) -> Result<String, String> {
     let src = PathBuf::from(source);
-    let dir = mods_dir(win64);
+    let dir = mods_dir(kmod);
     std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
     if src.is_dir() {
         let m = std::fs::read_to_string(src.join("mod.json"))
@@ -144,7 +165,10 @@ pub fn install(win64: &Path, source: &str) -> Result<String, String> {
     }
     let m = manifest_of_kmod(&src).ok_or("这个文件不是有效的 .kmod（缺少 mod.json 或 id）")?;
     let name = src.file_name().ok_or("路径不对")?;
-    std::fs::copy(&src, dir.join(name)).map_err(|e| e.to_string())?;
+    // Android: the loader installs packages from kmod/inbox when the game starts.
+    let dest_dir = if cfg!(target_os = "android") { kmod.join("inbox") } else { dir };
+    std::fs::create_dir_all(&dest_dir).map_err(|e| e.to_string())?;
+    std::fs::copy(&src, dest_dir.join(name)).map_err(|e| e.to_string())?;
     Ok(m["name"].as_str().or(m["id"].as_str()).unwrap_or("").to_string())
 }
 
@@ -161,21 +185,21 @@ fn copy_dir(from: &Path, to: &Path) -> Result<(), String> {
     Ok(())
 }
 
-pub fn delete(win64: &Path, file: &str, id: &str) -> Result<(), String> {
+pub fn delete(kmod: &Path, file: &str, id: &str, pending: bool) -> Result<(), String> {
     // `file` comes from the UI: it must be a plain name inside kmod\mods.
     if file.is_empty() || file.contains(['/', '\\']) || file == "." || file == ".." {
         return Err("文件名不合法".into());
     }
-    let p = mods_dir(win64).join(file);
+    let p = if pending { kmod.join("inbox").join(file) } else { mods_dir(kmod).join(file) };
     if p.is_dir() {
         std::fs::remove_dir_all(&p).map_err(|e| e.to_string())?;
     } else if p.is_file() {
         std::fs::remove_file(&p).map_err(|e| e.to_string())?;
     }
     if valid_id(id) {
-        let private = kmod_dir(win64).join(".private").join("mods").join(id);
+        let private = kmod.to_path_buf().join(".private").join("mods").join(id);
         let _ = std::fs::remove_dir_all(private);
-        set_enabled(win64, id, false)?;
+        set_enabled(kmod, id, false)?;
     }
     Ok(())
 }

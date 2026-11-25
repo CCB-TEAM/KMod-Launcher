@@ -182,3 +182,48 @@ input[type="checkbox"] { accent-color: var(--accent); width: 15px; height: 15px;
 .editor input[type="range"] { accent-color: var(--accent); width: 130px; }
 textarea { width: 100%; min-height: 150px; font: 12px/1.5 Consolas, "Cascadia Mono", monospace; color: var(--fg); background: var(--field); border: 1px solid transparent; border-radius: var(--r); padding: 10px 12px; resize: vertical; }
 textarea:focus { outline: none; border-color: var(--accent); }
+
+.chip.wait { color: var(--native); background: color-mix(in srgb, var(--native) 14%, transparent); }
+[hidden] { display: none !important; }
+button, .nav { -webkit-tap-highlight-color: transparent; }
+
+/* ---- compact layout: phones, and desktop windows narrower than 760px ---- */
+.shell.compact .app { flex-direction: column-reverse; }
+.shell[data-platform="android"] { padding-top: max(env(safe-area-inset-top, 0px), 12px); }
+.shell.compact .side {
+  width: 100%; flex-direction: row; justify-content: space-around; align-items: stretch; gap: 2px;
+  padding: 6px 6px calc(6px + env(safe-area-inset-bottom, 0px));
+  background: color-mix(in srgb, var(--bg) 86%, var(--fg)); border-top: 1px solid var(--line);
+}
+.shell.compact .nav { width: auto; flex: 1; padding: 8px 0 6px; gap: 3px; border-radius: calc(var(--r) * 1.5); }
+.shell.compact .nav svg { width: 22px; height: 22px; }
+.shell.compact .nav.active { background: var(--accent-soft); color: var(--fg); box-shadow: none; }
+.shell.compact .content { padding-right: 0; }
+.shell.compact .page { padding: 4px 16px 24px; }
+.shell.compact h1 { font-size: 22px; }
+.shell.compact .hero { gap: 18px; padding: 8px 0 0; }
+.shell.compact .hero h1 { font-size: 28px; }
+.shell.compact .hero p { font-size: 14px; }
+.shell.compact .iconbtn { width: 72px; height: 72px; border-radius: 18px; }
+.shell.compact h2.sec { margin-top: 20px; }
+.shell.compact .grow-row { flex-wrap: wrap; }
+.shell.compact .pathbox { flex: 1 1 100%; }
+.shell.compact .head { flex-direction: column; align-items: stretch; gap: 10px; }
+.shell.compact .head .row { flex-wrap: wrap; }
+.shell.compact .cards { gap: 10px; }
+.shell.compact .pcard { width: calc(50% - 5px); min-height: 80px; padding: 12px 14px; }
+.shell.compact .pcard b { font-size: 15px; }
+.shell.compact .field { grid-template-columns: 1fr; gap: 4px; }
+.shell.compact .themes { grid-template-columns: repeat(2, 1fr); }
+.shell.compact .editor { grid-template-columns: 1fr; }
+.shell.compact .card { padding: 14px; }
+.shell.compact .mod { flex-wrap: wrap; gap: 8px 12px; padding: 12px 6px; }
+.shell.compact .mod .info { flex: 1 1 60%; }
+.shell.compact .mod .info > div:last-child { white-space: normal; }
+.shell.compact .seg { max-width: 100%; overflow-x: auto; }
+.shell.compact .seg button { padding: 7px 12px; white-space: nowrap; }
+.shell.compact button { min-height: 40px; }
+.shell.compact .pill { min-height: 30px; }
+.shell.compact .rel .between { align-items: flex-start; }
+.shell.compact .log { font-size: 11px; }
+.shell.compact .toasts { left: 12px; right: 12px; bottom: calc(76px + env(safe-area-inset-bottom, 0px)); max-width: none; }

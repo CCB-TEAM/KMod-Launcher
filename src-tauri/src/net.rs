@@ -1,7 +1,11 @@
 use crate::config::Config;
 use std::time::Duration;
 
+#[cfg(not(target_os = "android"))]
 pub const REPO: &str = "CCB-TEAM/KMod-Loader-Windows";
+/// On Android the loader is injected into the game by the installer app, so that is what the launcher offers.
+#[cfg(target_os = "android")]
+pub const REPO: &str = "CCB-TEAM/KMod-Loader-Android";
 
 pub fn agent(cfg: &Config) -> ureq::Agent {
     let mut b = ureq::AgentBuilder::new()
@@ -46,6 +50,17 @@ pub struct Release {
     pub assets: Vec<Asset>,
 }
 
+#[cfg(target_os = "android")]
+fn flavor_of(name: &str) -> Option<&'static str> {
+    let n = name.to_lowercase();
+    if n.starts_with("kmod-installer") && n.ends_with(".apk") {
+        Some("release")
+    } else {
+        None
+    }
+}
+
+#[cfg(not(target_os = "android"))]
 fn flavor_of(name: &str) -> Option<&'static str> {
     let n = name.to_lowercase();
     if !n.ends_with(".zip") {

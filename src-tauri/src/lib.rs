@@ -1,3 +1,4 @@
+mod android;
 mod commands;
 mod config;
 mod game;
@@ -6,15 +7,22 @@ mod install;
 mod mods;
 mod net;
 mod paks;
+mod paths;
 
+#[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
+        .plugin(android::plugin())
         .setup(|app| {
             icon::apply(app.handle());
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
+            commands::platform,
+            commands::android_info,
+            commands::android_request_access,
+            commands::android_pick,
             commands::get_config,
             commands::save_config,
             commands::detect_games,

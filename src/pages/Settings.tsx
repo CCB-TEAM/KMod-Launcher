@@ -5,14 +5,16 @@ import type { Shared } from "../App";
 import GamePicker from "./GamePicker";
 import ThemeSettings from "./ThemeSettings";
 
-export default function Settings({ config, setConfig }: Shared) {
+export default function Settings({ config, setConfig, platform }: Shared) {
+  const android = platform === "android";
   const toast = useToast();
   const [proxy, setProxy] = useState(config.proxy);
   const [mirror, setMirror] = useState(config.mirror);
+  const [pkg, setPkg] = useState(config.package);
 
   const save = async () => {
     try {
-      await setConfig({ ...config, proxy: proxy.trim(), mirror: mirror.trim() });
+      await setConfig({ ...config, proxy: proxy.trim(), mirror: mirror.trim(), package: pkg.trim() });
       toast("ok", "已保存");
     } catch (e) {
       toast("err", errText(e));
@@ -22,11 +24,11 @@ export default function Settings({ config, setConfig }: Shared) {
   return (
     <div className="page">
       <h1>设置</h1>
-      <section className="card">
+      {!android && <section className="card">
         <h2>游戏目录</h2>
         <p className="mono small">{config.game_dir || "未选择"}</p>
         <GamePicker config={config} setConfig={setConfig} />
-      </section>
+      </section>}
       <ThemeSettings config={config} setConfig={setConfig} />
       <section className="card">
         <h2>网络</h2>
@@ -34,6 +36,12 @@ export default function Settings({ config, setConfig }: Shared) {
           <span>代理</span>
           <input value={proxy} placeholder="http://127.0.0.1:7890 或 socks5://127.0.0.1:7890（留空则用环境变量）" onChange={(e) => setProxy(e.target.value)} />
         </label>
+        {android && (
+          <label className="field">
+            <span>游戏包名</span>
+            <input value={pkg} placeholder="com.android1939.kardsapk" onChange={(e) => setPkg(e.target.value)} />
+          </label>
+        )}
         <label className="field">
           <span>下载镜像前缀</span>
           <input value={mirror} placeholder="加在 GitHub 下载地址前面的镜像，留空则直连" onChange={(e) => setMirror(e.target.value)} />

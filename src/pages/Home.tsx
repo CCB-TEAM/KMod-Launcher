@@ -38,6 +38,74 @@ export default function Home(p: Shared) {
     return () => clearInterval(t);
   }, [config.game_dir]);
 
+  if (p.platform === "android") {
+    const a = p.ainfo;
+    const launchA = async () => {
+      try {
+        await api.launchGame();
+      } catch (e) {
+        toast("err", errText(e));
+      }
+    };
+    const grant = async () => {
+      try {
+        await api.androidRequestAccess();
+      } catch (e) {
+        toast("err", errText(e));
+      }
+    };
+    return (
+      <div className="page">
+        <Hero iconUrl={p.iconUrl} pickIcon={p.pickIcon} resetIcon={p.resetIcon} />
+
+        <h2 className="sec"><IconPlay />游戏</h2>
+        <div className="cards">
+          <div className={a?.installed ? "pcard on" : "pcard"}>
+            <b>{a?.installed ? `已安装${a.version ? " " + a.version : ""}` : "没有找到游戏"}</b>
+            <small>{a?.installed ? config.package : `没有找到 ${config.package}，先到「安装器」装打过补丁的 KARDS`}</small>
+          </div>
+          <button className="pcard action" onClick={launchA} disabled={!a?.installed}>
+            <b>启动游戏</b>
+            <small>启动打过补丁的 KARDS</small>
+          </button>
+        </div>
+
+        <h2 className="sec"><IconFolder />文件权限</h2>
+        {a?.access ? (
+          <div className="cards">
+            <div className="pcard on">
+              <b>已授权</b>
+              <small>可以读写游戏的 Android/media 文件夹</small>
+            </div>
+            <div className={state?.installed ? "pcard on" : "pcard"}>
+              <b>{state?.installed ? "已找到 kmod 文件夹" : "还没有 kmod 文件夹"}</b>
+              <small>{state?.installed ? (state.log_version ? `加载器 ${state.log_version}` : "加载器版本未知") : "装好游戏并启动一次后会出现"}</small>
+            </div>
+          </div>
+        ) : (
+          <>
+            <p className="muted">管理模组要读写游戏放在 Android/media 里的 kmod 文件夹，需要在系统设置里允许“所有文件访问”。</p>
+            <div className="row">
+              <button className="primary" onClick={grant}>去授权</button>
+              <button onClick={p.refreshAndroid}>已授权，刷新</button>
+            </div>
+          </>
+        )}
+
+        <div className="cards" style={{ marginTop: 18 }}>
+          <button className="pcard action" onClick={() => go("mods")}>
+            <b>管理模组</b>
+            <small>启用、停用、安装</small>
+          </button>
+          <button className="pcard action" onClick={() => go("loader")}>
+            <b>安装器</b>
+            <small>获取并安装 kmod 安装器</small>
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   if (!config.game_dir) {
     return (
       <div className="page">

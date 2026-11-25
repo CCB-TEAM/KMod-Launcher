@@ -2,6 +2,8 @@ use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 use tauri::{AppHandle, Manager};
 
+pub const DEFAULT_PACKAGE: &str = "com.android1939.kardsapk";
+
 /// Launcher settings, stored as JSON in the app config directory.
 #[derive(Serialize, Deserialize, Clone, Debug)]
 #[serde(default)]
@@ -22,6 +24,8 @@ pub struct Config {
     pub custom_themes: Vec<serde_json::Value>,
     /// File name of the custom app icon inside the config directory; empty = built-in icon.
     pub icon: String,
+    /// Android: package name of the patched game.
+    pub package: String,
 }
 
 impl Default for Config {
@@ -35,6 +39,7 @@ impl Default for Config {
             theme: "violet".into(),
             custom_themes: Vec::new(),
             icon: String::new(),
+            package: DEFAULT_PACKAGE.into(),
         }
     }
 }

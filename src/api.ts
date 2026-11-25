@@ -10,6 +10,7 @@ export interface Config {
   theme: string;
   custom_themes: unknown[];
   icon: string;
+  package: string;
 }
 
 export interface InstallState {
@@ -46,11 +47,24 @@ export interface ModInfo {
   kind: "lua" | "native" | "pak";
   pack: "folder" | "kmod" | "pak";
   file: string;
+  pending: boolean;
 }
+
+export interface AndroidInfo {
+  access: boolean;
+  installed: boolean;
+  version: string;
+}
+
+export type Platform = "windows" | "android";
 
 export type Folder = "game" | "kmod" | "mods" | "paks" | "logs";
 
 export const api = {
+  platform: () => invoke<Platform>("platform"),
+  androidInfo: () => invoke<AndroidInfo>("android_info"),
+  androidRequestAccess: () => invoke<void>("android_request_access"),
+  androidPick: (exts: string[]) => invoke<string[]>("android_pick", { exts }),
   getConfig: () => invoke<Config>("get_config"),
   saveConfig: (config: Config) => invoke<Config>("save_config", { config }),
   detectGames: () => invoke<string[]>("detect_games"),
@@ -65,7 +79,7 @@ export const api = {
   listMods: () => invoke<ModInfo[]>("list_mods"),
   setModEnabled: (id: string, enabled: boolean, kind: string) => invoke<void>("set_mod_enabled", { id, enabled, kind }),
   installMod: (source: string) => invoke<string>("install_mod", { source }),
-  deleteMod: (file: string, id: string, kind: string) => invoke<void>("delete_mod", { file, id, kind }),
+  deleteMod: (file: string, id: string, kind: string, pending: boolean) => invoke<void>("delete_mod", { file, id, kind, pending }),
   readLog: (name: "kmod" | "proxy") => invoke<string>("read_log", { name }),
   openPath: (which: Folder) => invoke<void>("open_path", { which }),
   openUrl: (url: string) => invoke<void>("open_url", { url }),

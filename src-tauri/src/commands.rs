@@ -1,10 +1,9 @@
 use crate::config::{self, Config};
-use crate::game::{self, kmod_dir, EXE};
+use crate::game::{self, EXE};
 use crate::install::{self, InstallState};
 use crate::mods::{self, ModInfo};
-use crate::paks;
 use crate::net::{self, Release};
-use std::path::PathBuf;
+use crate::{android, paks, paths};
 use tauri::AppHandle;
 
 #[cfg(windows)]
@@ -13,15 +12,20 @@ use std::os::windows::process::CommandExt;
 #[cfg(windows)]
 const CREATE_NO_WINDOW: u32 = 0x0800_0000;
 
-fn win64(app: &AppHandle) -> Result<PathBuf, String> {
-    let cfg = config::load(app);
-    game::normalize(&cfg.game_dir).ok_or_else(|| "还没有选择游戏目录".to_string())
-}
-
 async fn blocking<T: Send + 'static>(f: impl FnOnce() -> Result<T, String> + Send + 'static) -> Result<T, String> {
     tauri::async_runtime::spawn_blocking(f)
         .await
         .map_err(|e| e.to_string())?
+}
+
+/// "windows" or "android": the frontend lays itself out and hides features by this.
+#[tauri::command]
+pub fn platform() -> &'static str {
+    if cfg!(target_os = "android") {
+        "android"
+    } else {
+        "windows"
+    }
 }
 
 #[tauri::command]
@@ -60,6 +64,9 @@ pub fn check_game(path: String) -> Option<String> {
 
 #[tauri::command]
 pub fn game_running() -> bool {
+    if cfg!(target_os = "android") {
+        return false;
+    }
     let mut cmd = std::process::Command::new("tasklist");
     cmd.args(["/FI", &format!("IMAGENAME eq {EXE}"), "/NH"]);
     #[cfg(windows)]
@@ -69,9 +76,17 @@ pub fn game_running() -> bool {
         .unwrap_or(false)
 }
 
+fn package(app: &AppHandle) -> String {
+    let p = config::load(app).package;
+    if p.trim().is_empty() { config::DEFAULT_PACKAGE.into() } else { p.trim().to_string() }
+}
+
 #[tauri::command]
 pub fn launch_game(app: AppHandle) -> Result<(), String> {
-    let dir = win64(&app)?;
+    if cfg!(target_os = "android") {
+        return android::launch(&app, &package(&app));
+    }
+    let dir = paths::dirs(&app)?.game.ok_or("还没有选择游戏目录")?;
     if game_running() {
         return Err("游戏已经在运行".into());
     }
@@ -84,7 +99,35 @@ pub fn launch_game(app: AppHandle) -> Result<(), String> {
 
 #[tauri::command]
 pub fn get_installed(app: AppHandle) -> Result<InstallState, String> {
-    Ok(install::state(&win64(&app)?))
+    let d = paths::dirs(&app)?;
+    match &d.game {
+        Some(win64) => Ok(install::state(win64)),
+        // Android: the loader lives inside the patched game; its folder appears after the first start.
+        None => Ok(InstallState {
+            installed: d.kmod.join("state.json").is_file() || d.kmod.join("logs").is_dir(),
+            tag: String::new(),
+            flavor: String::new(),
+            log_version: install::log_version(&d.kmod),
+            foreign_proxy: false,
+        }),
+    }
+}
+
+#[tauri::command]
+pub async fn android_info(app: AppHandle) -> Result<android::AndroidInfo, String> {
+    let pkg = package(&app);
+    blocking(move || android::info(&app, &pkg)).await
+}
+
+#[tauri::command]
+pub async fn android_request_access(app: AppHandle) -> Result<(), String> {
+    blocking(move || android::request_access(&app)).await
+}
+
+/// System file picker (Android). Returns paths of copies in the app cache.
+#[tauri::command]
+pub async fn android_pick(app: AppHandle, exts: Vec<String>) -> Result<Vec<String>, String> {
+    blocking(move || android::pick(&app, &exts)).await
 }
 
 #[tauri::command]
@@ -103,12 +146,24 @@ pub async fn install_loader(
     replace_foreign: bool,
 ) -> Result<(), String> {
     let cfg = config::load(&app);
-    let dir = win64(&app)?;
     // Only ever download from the loader's own GitHub releases.
     let prefix = format!("https://github.com/{}/releases/download/", net::REPO);
     if !url.starts_with(&prefix) {
         return Err("下载地址不是官方发布页".into());
     }
+    if cfg!(target_os = "android") {
+        // The installer app: download the APK, then hand it to the system installer.
+        use tauri::Manager;
+        let cache = app.path().app_cache_dir().map_err(|e| e.to_string())?;
+        std::fs::create_dir_all(&cache).map_err(|e| e.to_string())?;
+        let dest = cache.join("kmod-installer.apk");
+        return blocking(move || {
+            let (path, _sha) = install::download(&app, &cfg, &url, size, dest)?;
+            android::install_apk(&app, &path.to_string_lossy())
+        })
+        .await;
+    }
+    let dir = paths::dirs(&app)?.game.ok_or("还没有选择游戏目录")?;
     if game_running() {
         return Err("游戏正在运行，请先关闭游戏".into());
     }
@@ -117,59 +172,67 @@ pub async fn install_loader(
 
 #[tauri::command]
 pub fn uninstall_loader(app: AppHandle, remove_data: bool) -> Result<(), String> {
+    let dir = paths::dirs(&app)?.game.ok_or("手机版请在系统里卸载打过补丁的游戏")?;
     if game_running() {
         return Err("游戏正在运行，请先关闭游戏".into());
     }
-    install::uninstall(&win64(&app)?, remove_data)
+    install::uninstall(&dir, remove_data)
 }
 
 #[tauri::command]
 pub fn list_mods(app: AppHandle) -> Result<Vec<ModInfo>, String> {
-    let dir = win64(&app)?;
-    let mut all = mods::list(&dir);
-    all.extend(paks::list(&dir));
+    let d = paths::dirs(&app)?;
+    let mut all = mods::list(&d.kmod);
+    all.extend(paks::list(&d.paks));
     Ok(all)
 }
 
 #[tauri::command]
 pub fn set_mod_enabled(app: AppHandle, id: String, enabled: bool, kind: String) -> Result<(), String> {
-    let dir = win64(&app)?;
+    let d = paths::dirs(&app)?;
     if kind == "pak" {
         if game_running() {
             return Err("游戏正在运行，请先关闭游戏".into());
         }
-        return paks::set_enabled(&dir, &id, enabled);
+        return paks::set_enabled(&d.paks, &id, enabled);
     }
-    mods::set_enabled(&dir, &id, enabled)
+    mods::set_enabled(&d.kmod, &id, enabled)
 }
 
 #[tauri::command]
 pub fn install_mod(app: AppHandle, source: String) -> Result<String, String> {
-    let dir = win64(&app)?;
-    if source.to_lowercase().ends_with(".pak") {
-        return paks::install(&dir, &source);
+    let d = paths::dirs(&app)?;
+    let r = if source.to_lowercase().ends_with(".pak") {
+        paks::install(&d.paks, &source)
+    } else {
+        mods::install(&d.kmod, &source)
+    };
+    // Files the Android picker copied into the cache are ours to clean up.
+    if cfg!(target_os = "android") {
+        let _ = std::fs::remove_file(&source);
     }
-    mods::install(&dir, &source)
+    r
 }
 
 #[tauri::command]
-pub fn delete_mod(app: AppHandle, file: String, id: String, kind: String) -> Result<(), String> {
-    let dir = win64(&app)?;
+pub fn delete_mod(app: AppHandle, file: String, id: String, kind: String, pending: bool) -> Result<(), String> {
+    let d = paths::dirs(&app)?;
     if kind == "pak" {
         if game_running() {
             return Err("游戏正在运行，请先关闭游戏".into());
         }
-        return paks::delete(&dir, &file);
+        return paks::delete(&d.paks, &file);
     }
-    mods::delete(&dir, &file, &id)
+    mods::delete(&d.kmod, &file, &id, pending)
 }
 
 /// Last part of the loader log (about 200 KB).
 #[tauri::command]
 pub fn read_log(app: AppHandle, name: String) -> Result<String, String> {
+    let d = paths::dirs(&app)?;
     let file = match name.as_str() {
-        "proxy" => kmod_dir(&win64(&app)?).join("proxy.log"),
-        _ => kmod_dir(&win64(&app)?).join("logs").join("kmod.log"),
+        "proxy" => d.kmod.join("proxy.log"),
+        _ => d.kmod.join("logs").join("kmod.log"),
     };
     let data = match std::fs::read(&file) {
         Ok(d) => d,
@@ -179,16 +242,19 @@ pub fn read_log(app: AppHandle, name: String) -> Result<String, String> {
     Ok(String::from_utf8_lossy(&data[start..]).to_string())
 }
 
-/// `which`: game | kmod | mods | logs
+/// `which`: game | kmod | mods | paks | logs (desktop only)
 #[tauri::command]
 pub fn open_path(app: AppHandle, which: String) -> Result<(), String> {
-    let base = win64(&app)?;
+    if cfg!(target_os = "android") {
+        return Err("手机上请用文件管理器打开 Android/media 里的 kmod 文件夹".into());
+    }
+    let d = paths::dirs(&app)?;
     let p = match which.as_str() {
-        "game" => base,
-        "kmod" => kmod_dir(&base),
-        "mods" => kmod_dir(&base).join("mods"),
-        "paks" => paks::paks_dir(&base).ok_or("找不到 Paks 文件夹")?,
-        "logs" => kmod_dir(&base).join("logs"),
+        "game" => d.game.ok_or("还没有选择游戏目录")?,
+        "kmod" => d.kmod,
+        "mods" => d.kmod.join("mods"),
+        "paks" => d.paks,
+        "logs" => d.kmod.join("logs"),
         _ => return Err("未知目录".into()),
     };
     std::fs::create_dir_all(&p).map_err(|e| e.to_string())?;
@@ -200,9 +266,12 @@ pub fn open_path(app: AppHandle, which: String) -> Result<(), String> {
 }
 
 #[tauri::command]
-pub fn open_url(url: String) -> Result<(), String> {
+pub fn open_url(app: AppHandle, url: String) -> Result<(), String> {
     if !url.starts_with("https://github.com/CCB-TEAM/") {
         return Err("不允许打开这个链接".into());
+    }
+    if cfg!(target_os = "android") {
+        return android::open_url(&app, &url);
     }
     std::process::Command::new("explorer")
         .arg(&url)
