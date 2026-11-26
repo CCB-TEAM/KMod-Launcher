@@ -50,6 +50,7 @@ export interface CatalogVersion {
   permissions?: string[];
   depends?: string[];
   paks?: boolean;
+  downloads?: number;
 }
 
 export interface CatalogMod {
@@ -61,6 +62,8 @@ export interface CatalogMod {
   cover?: string | null;
   repo?: string;
   stars?: number;
+  /** of all releases; absent in indexes that do not count them */
+  downloads?: number;
   updated?: string;
   verified?: boolean;
   versions: CatalogVersion[];

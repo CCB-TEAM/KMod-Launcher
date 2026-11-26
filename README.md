@@ -4,7 +4,7 @@ KARDS 的 [KMod 加载器](https://github.com/CCB-TEAM/KMod-Loader-Windows)安�
 
 ## 功能
 
-- **发现**：浏览和下载社区模组（来自 [kmod-index](https://github.com/CCB-TEAM/kmod-index)，可添加其他索引），按 SHA-256 校验；原生 C++ 模组安装前会弹出警告。
+- **发现**：浏览和下载社区模组，显示下载量和 GitHub 星标（来自 [kmod-index](https://github.com/CCB-TEAM/kmod-index)，可添加其他索引），按 SHA-256 校验；原生 C++ 模组安装前会弹出警告。
 - **模组管理**：Lua、原生 C++、Pak 三类分色显示；启用、停用、安装 `.kmod` 和 `.pak`、删除。
 - **Windows**：在 Steam 库里找到 KARDS，安装、更新、卸载加载器（正式版或开发版），启动游戏。
 - **Android**：内置安装器，把加载器注入手机上已安装的游戏并安装，不需要电脑。

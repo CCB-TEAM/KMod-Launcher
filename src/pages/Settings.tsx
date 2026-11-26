@@ -66,7 +66,7 @@ export default function Settings({ config, setConfig, platform }: Shared) {
       </section>
       <section className="card">
         <h2>关于</h2>
-        <p className="muted">KMod Launcher 1.0.0 · MIT 许可证。KARDS 属于其所有者，本项目与其没有隶属关系。</p>
+        <p className="muted">KMod Launcher 1.1.0 · MIT 许可证。KARDS 属于其所有者，本项目与其没有隶属关系。</p>
       </section>
     </div>
   );

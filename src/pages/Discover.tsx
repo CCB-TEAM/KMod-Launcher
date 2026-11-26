@@ -8,8 +8,11 @@ import { PakWarning } from "../PakDialogs";
 import { bestVersion, isNewer, problem, type Here } from "../compat";
 
 type Kind = "all" | "lua" | "native";
-type Sort = "updated" | "stars" | "name";
-const SORTS: [Sort, string][] = [["updated", "最近更新"], ["stars", "星标数"], ["name", "名称"]];
+type Sort = "updated" | "downloads" | "stars" | "name";
+const SORTS: [Sort, string][] = [["updated", "最近更新"], ["downloads", "下载量"], ["stars", "星标数"], ["name", "名称"]];
+
+/** 1234 -> "1234", 23456 -> "2.3万" */
+const fmtCount = (n: number) => (n >= 10000 ? `${(n / 10000).toFixed(1)}万` : String(n));
 
 // the page keeps what it fetched while the launcher runs
 let cached: Catalog | null = null;
@@ -92,7 +95,11 @@ export default function Discover({ config, state, ainfo, platform, go }: Shared)
       .filter((m) => !needle || `${m.name} ${m.id} ${m.author} ${m.description}`.toLowerCase().includes(needle))
       .filter((m) => kind === "all" || (bestVersion(m, here).native ? "native" : "lua") === kind)
       .filter((m) => !onlyCompatible || !problem(bestVersion(m, here), here))
-      .sort((a, b) => (sort === "stars" ? (b.stars ?? 0) - (a.stars ?? 0) : sort === "name" ? a.name.localeCompare(b.name) : (b.updated ?? "").localeCompare(a.updated ?? "")));
+      .sort((a, b) =>
+        sort === "stars" ? (b.stars ?? 0) - (a.stars ?? 0)
+        : sort === "downloads" ? (b.downloads ?? 0) - (a.downloads ?? 0)
+        : sort === "name" ? a.name.localeCompare(b.name)
+        : (b.updated ?? "").localeCompare(a.updated ?? ""));
   }, [catalog, q, kind, sort, onlyCompatible, here.kmod, here.kards]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // say so when the "compatible only" filter is what hides mods, instead of showing an empty page
@@ -176,7 +183,19 @@ export default function Discover({ config, state, ainfo, platform, go }: Shared)
                   <small>{m.author || m.id}</small>
                   {list && <p>{m.description}</p>}
                   <div className="stats">
-                    {!!m.stars && <span>★ {m.stars}</span>}
+                    {m.repo && (
+                      <button
+                        className="star"
+                        title="在 GitHub 上点星"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          void api.openUrl(m.repo!);
+                        }}
+                      >
+                        ★ {fmtCount(m.stars ?? 0)}
+                      </button>
+                    )}
+                    {m.downloads !== undefined && <span title="下载量">↓ {fmtCount(m.downloads)}</span>}
                     <span>v{v.version}</span>
                     {m.updated && <span>{m.updated}</span>}
                     <span>{fmtSize(v.size)}</span>
@@ -203,6 +222,7 @@ export default function Discover({ config, state, ainfo, platform, go }: Shared)
               </div>
             </div>
             <p>{detail.description || "（没有说明）"}</p>
+            {detail.downloads !== undefined && <p className="muted small">总下载量 {fmtCount(detail.downloads)}</p>}
             {detail.versions.map((v) => {
               const why = problem(v, here);
               const old = have(detail);
@@ -210,7 +230,10 @@ export default function Discover({ config, state, ainfo, platform, go }: Shared)
                 <div key={v.version} className="rel between">
                   <div>
                     <b>{v.version}</b>
-                    <span className="muted small">　{v.published}　{fmtSize(v.size)}</span>
+                    <span className="muted small">
+                      　{v.published}　{fmtSize(v.size)}
+                      {v.downloads !== undefined && `　↓ ${fmtCount(v.downloads)}`}
+                    </span>
                     {v.permissions?.length ? <div className="muted small">权限：{v.permissions.join("、")}</div> : null}
                     {why && <div className="err small">{why}</div>}
                   </div>
@@ -221,7 +244,7 @@ export default function Discover({ config, state, ainfo, platform, go }: Shared)
               );
             })}
             <div className="row end">
-              {detail.repo && <button onClick={() => api.openUrl(detail.repo!)}>打开仓库</button>}
+              {detail.repo && <button onClick={() => api.openUrl(detail.repo!)}>★ {fmtCount(detail.stars ?? 0)}　去 GitHub 点星</button>}
               <button className="primary" onClick={() => setDetail(null)}>关闭</button>
             </div>
           </div>
