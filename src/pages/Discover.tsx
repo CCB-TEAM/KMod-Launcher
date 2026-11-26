@@ -5,7 +5,8 @@ import type { Shared } from "../App";
 import { IconFilter, IconGrid, IconList, IconSearch } from "../Icons";
 import NativeWarning from "../NativeWarning";
 import { PakWarning } from "../PakDialogs";
-import { bestVersion, isNewer, problem, type Here } from "../compat";
+import { bestVersion, hereOf, isNewer, problem } from "../compat";
+import { cachedCatalog, getCatalog } from "../catalog";
 
 type Kind = "all" | "lua" | "native";
 type Sort = "updated" | "downloads" | "stars" | "name";
@@ -14,12 +15,9 @@ const SORTS: [Sort, string][] = [["updated", "最近更新"], ["downloads", "下
 /** 1234 -> "1234", 23456 -> "2.3万" */
 const fmtCount = (n: number) => (n >= 10000 ? `${(n / 10000).toFixed(1)}万` : String(n));
 
-// the page keeps what it fetched while the launcher runs
-let cached: Catalog | null = null;
-
 export default function Discover({ config, state, ainfo, platform, go }: Shared) {
   const toast = useToast();
-  const [catalog, setCatalog] = useState<Catalog | null>(cached);
+  const [catalog, setCatalog] = useState<Catalog | null>(cachedCatalog());
   const [loading, setLoading] = useState(false);
   const [installed, setInstalled] = useState<ModInfo[]>([]);
   const [q, setQ] = useState("");
@@ -35,18 +33,14 @@ export default function Discover({ config, state, ainfo, platform, go }: Shared)
   const [progress, setProgress] = useState<Progress | null>(null);
   const alive = useRef(true);
 
-  const here: Here = {
-    platform: platform === "android" ? "Android" : "Windows",
-    kmod: /\d+(\.\d+)+/.exec(state?.log_version || state?.tag || "")?.[0] ?? "",
-    kards: platform === "android" ? ainfo?.version ?? "" : "",
-  };
+  const here = hereOf(platform, state, ainfo);
 
   const readInstalled = useCallback(() => api.listMods().then((l) => alive.current && setInstalled(l)).catch(() => {}), []);
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      cached = await api.fetchCatalog();
-      if (alive.current) setCatalog(cached);
+      const c = await getCatalog(true);
+      if (alive.current) setCatalog(c);
     } catch (e) {
       toast("err", errText(e));
     } finally {
@@ -57,7 +51,7 @@ export default function Discover({ config, state, ainfo, platform, go }: Shared)
   useEffect(() => {
     alive.current = true;
     void readInstalled();
-    if (!cached) void load();
+    if (!cachedCatalog()) void load();
     const un = onProgress((p) => alive.current && setProgress(p));
     return () => {
       alive.current = false;

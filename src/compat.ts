@@ -1,4 +1,4 @@
-import type { CatalogMod, CatalogVersion } from "./api";
+import type { AndroidInfo, CatalogMod, CatalogVersion, InstallState, ModInfo, Platform } from "./api";
 
 /** Compares dotted version numbers ("0.10.1" > "0.9"). */
 export function cmpVersion(a: string, b: string): number {
@@ -38,3 +38,18 @@ export function problem(v: CatalogVersion, here: Here): string {
 export const bestVersion = (m: CatalogMod, here: Here) => m.versions.find((v) => !problem(v, here)) ?? m.versions[0];
 
 export const isNewer = (candidate: string, installed: string) => cmpVersion(candidate, installed) > 0;
+
+/** This platform, the installed loader and (Android) the game version. */
+export const hereOf = (platform: Platform, state: InstallState | null, ainfo: AndroidInfo | null): Here => ({
+  platform: platform === "android" ? "Android" : "Windows",
+  kmod: /\d+(\.\d+)+/.exec(state?.log_version || state?.tag || "")?.[0] ?? "",
+  kards: platform === "android" ? ainfo?.version ?? "" : "",
+});
+
+/** The newest version an installed mod can be updated to here, else null. */
+export function updateFor(m: ModInfo, catalog: CatalogMod[], here: Here): CatalogVersion | null {
+  if (m.kind === "pak" || m.pending) return null;
+  const c = catalog.find((x) => x.id === m.id);
+  const v = c?.versions.find((v) => !problem(v, here));
+  return v && isNewer(v.version, m.version) ? v : null;
+}

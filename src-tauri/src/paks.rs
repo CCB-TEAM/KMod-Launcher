@@ -130,6 +130,58 @@ pub fn delete(paks: &Path, stem: &str) -> Result<(), String> {
     Ok(())
 }
 
+/// Android: `kmod/pak-order.txt` decides the order the loader mounts kmod/paks in (one `.pak` name per line, a later line
+/// wins). Paks it does not name come after the listed ones, by name.
+fn order_file(kmod: &Path) -> PathBuf {
+    kmod.join("pak-order.txt")
+}
+
+/// Every pak (on or off) as `X.pak`, in the order they are mounted: the last one wins.
+pub fn order(kmod: &Path, paks: &Path) -> Vec<String> {
+    let mut names: Vec<String> = list(paks).into_iter().map(|m| format!("{}.pak", m.file)).collect();
+    names.sort();
+    let text = std::fs::read_to_string(order_file(kmod)).unwrap_or_default();
+    let mut out = Vec::new();
+    for line in text.trim_start_matches('\u{feff}').lines() {
+        let n = line.trim_end();
+        if let Some(i) = names.iter().position(|x| x == n) {
+            out.push(names.remove(i));
+        }
+    }
+    out.extend(names);
+    out
+}
+
+pub fn set_order(kmod: &Path, names: &[String]) -> Result<(), String> {
+    if names.iter().any(|n| !n.to_lowercase().ends_with(".pak") || !valid_stem(n) || n.contains(['\n', '\r'])) {
+        return Err("Pak 名字不合法".into());
+    }
+    std::fs::create_dir_all(kmod).map_err(|e| e.to_string())?;
+    let mut text = names.join("\n");
+    text.push('\n');
+    std::fs::write(order_file(kmod), text).map_err(|e| e.to_string())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn order_follows_the_file_then_names() {
+        let root = std::env::temp_dir().join(format!("kmod-order-test-{}", std::process::id()));
+        let paks = root.join("paks");
+        std::fs::create_dir_all(&paks).unwrap();
+        for f in ["b.pak", "中文_P.pak", "a.pak.disable", "c.pak"] {
+            std::fs::write(paks.join(f), b"x").unwrap();
+        }
+        assert_eq!(order(&root, &paks), ["a.pak", "b.pak", "c.pak", "中文_P.pak"]);
+        set_order(&root, &["中文_P.pak".into(), "gone.pak".into(), "a.pak".into()]).unwrap();
+        assert_eq!(order(&root, &paks), ["中文_P.pak", "a.pak", "b.pak", "c.pak"]);
+        assert!(set_order(&root, &["../x.pak".into()]).is_err());
+        std::fs::remove_dir_all(&root).unwrap();
+    }
+}
+
 /// Copies a `.pak` and its `.utoc` / `.ucas` / `.sig` siblings into the Paks folder (enabled).
 pub fn install(paks: &Path, source: &str) -> Result<String, String> {
     let src = PathBuf::from(source);

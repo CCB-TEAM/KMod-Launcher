@@ -299,6 +299,19 @@ pub fn delete_mod(app: AppHandle, file: String, id: String, kind: String, pendin
     mods::delete(&d.kmod, &file, &id, pending)
 }
 
+/// Pak files (`X.pak`) in the order the loader mounts them; the last one wins.
+#[tauri::command]
+pub fn pak_order(app: AppHandle) -> Result<Vec<String>, String> {
+    let d = paths::dirs(&app)?;
+    Ok(paks::order(&d.kmod, &d.paks))
+}
+
+#[tauri::command]
+pub fn set_pak_order(app: AppHandle, names: Vec<String>) -> Result<(), String> {
+    let d = paths::dirs(&app)?;
+    paks::set_order(&d.kmod, &names)
+}
+
 /// Last part of the loader log (about 200 KB).
 #[tauri::command]
 pub fn read_log(app: AppHandle, name: String) -> Result<String, String> {

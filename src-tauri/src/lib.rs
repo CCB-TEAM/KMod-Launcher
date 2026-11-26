@@ -45,6 +45,8 @@ pub fn run() {
             commands::fetch_catalog,
             commands::install_remote,
             commands::delete_mod,
+            commands::pak_order,
+            commands::set_pak_order,
             commands::read_log,
             commands::open_path,
             commands::open_url,
