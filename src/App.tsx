@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { api, errText, type AndroidInfo, type Config, type InstallState, type Platform } from "./api";
+import { api, errText, type AndroidInfo, type Config, type InstallState, type Platform, type Update } from "./api";
 import { pickFiles } from "./pick";
 import { ToastHost, useToast } from "./toast";
 import Home from "./pages/Home";
@@ -10,6 +10,9 @@ import Logs from "./pages/Logs";
 import Settings from "./pages/Settings";
 import Installer from "./pages/Installer";
 import TitleBar from "./TitleBar";
+import Onboarding from "./Onboarding";
+import PermissionStep, { allGranted } from "./PermissionStep";
+import UpdateDialog from "./Update";
 import { allThemes, applyTheme } from "./themes";
 import { IconHome, IconLoader, IconMods, IconLogs, IconSettings, IconStore } from "./Icons";
 
@@ -37,6 +40,8 @@ export interface Shared {
   iconUrl: string;
   pickIcon: () => Promise<void>;
   resetIcon: () => Promise<void>;
+  /** Asks GitHub for a newer launcher and offers it; says so when there is none. */
+  checkUpdate: () => Promise<void>;
 }
 
 export default function App() {
@@ -57,6 +62,7 @@ function Inner() {
   const [platform, setPlatform] = useState<Platform | "">("");
   const [ainfo, setAinfo] = useState<AndroidInfo | null>(null);
   const [narrow, setNarrow] = useState(window.innerWidth < 760);
+  const [update, setUpdate] = useState<Update | null>(null);
 
   useEffect(() => {
     const on = () => setNarrow(window.innerWidth < 760);
@@ -80,8 +86,9 @@ function Inner() {
   const refreshAndroid = useCallback(async () => {
     try {
       setAinfo(await api.androidInfo());
-    } catch {
-      setAinfo(null);
+    } catch (e) {
+      setAinfo({ access: false, apps: false, installed: false, version: "" });
+      console.error(errText(e));
     }
   }, []);
 
@@ -134,20 +141,56 @@ function Inner() {
     }
   };
 
+  // once per start, after the guide; being offline is not worth a message here
+  const ready = !!config?.onboarded;
+  useEffect(() => {
+    if (ready) api.checkUpdate().then(setUpdate).catch(() => {});
+  }, [ready]);
+
+  const checkUpdate = async () => {
+    try {
+      const u = await api.checkUpdate();
+      if (u) setUpdate(u);
+      else toast("ok", "已经是最新版本");
+    } catch (e) {
+      toast("err", errText(e));
+    }
+  };
+
   const setConfig = async (c: Config) => {
     setCfg(await api.saveConfig(c));
     await refresh();
   };
 
   if (!config || !platform) return <div className="boot">{fatal || "正在加载…"}</div>;
-  const shared: Shared = { config, setConfig, state, refresh, go: setPage, platform, ainfo, refreshAndroid, iconUrl, pickIcon, resetIcon };
+  const shared: Shared = { config, setConfig, state, refresh, go: setPage, platform, ainfo, refreshAndroid, iconUrl, pickIcon, resetIcon, checkUpdate };
   const android = platform === "android";
   const needGame = !android && !config.game_dir;
   const compact = android || narrow;
   const pages = PAGES.map((p) => (p.id === "loader" && android ? { ...p, label: "安装器" } : p));
 
+  if (android && !ainfo) return <div className="boot">正在检查权限…</div>;
+  // the first-start guide; and on Android nothing else is shown while a permission is missing
+  if (!config.onboarded || (android && !allGranted(ainfo))) {
+    return (
+      <div className={compact ? "shell compact" : "shell"} data-platform={platform}>
+        {!android && <TitleBar iconUrl={iconUrl} />}
+        {!config.onboarded ? (
+          <Onboarding config={config} setConfig={setConfig} platform={platform} ainfo={ainfo} refreshAndroid={refreshAndroid} />
+        ) : (
+          <div className="guide">
+            <div className="guide-body">
+              <PermissionStep ainfo={ainfo} refresh={refreshAndroid} />
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  }
+
   return (
     <>
+      {update && <UpdateDialog update={update} platform={platform} onClose={() => setUpdate(null)} />}
       <div className={compact ? "shell compact" : "shell"} data-platform={platform}>
         {!android && <TitleBar iconUrl={iconUrl} />}
         <div className="app">

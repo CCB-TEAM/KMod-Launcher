@@ -8,7 +8,8 @@ KARDS 的 [KMod 加载器](https://github.com/CCB-TEAM/KMod-Loader-Windows)安�
 - **模组管理**：Lua、原生 C++、Pak 三类分色显示；启用、停用、安装 `.kmod` 和 `.pak`、删除。
 - **Windows**：在 Steam 库里找到 KARDS，安装、更新、卸载加载器（正式版或开发版），启动游戏。
 - **Android**：内置安装器，把加载器注入手机上已安装的游戏并安装，不需要电脑。
-- GitHub 下载代理（含 gh-proxy.com）、日志查看、主题。
+- 检查并安装启动器自身的更新。
+- 首次启动引导（选主题、设置 GitHub 代理）；GitHub 下载代理（预设 gh-proxy.com、gh-proxy.org）、日志查看、主题。
 
 界面目前只有中文。
 

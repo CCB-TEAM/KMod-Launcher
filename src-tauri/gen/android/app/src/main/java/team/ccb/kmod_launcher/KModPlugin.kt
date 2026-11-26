@@ -1,7 +1,9 @@
 package team.ccb.kmod_launcher
 
+import android.Manifest
 import android.app.Activity
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Build
 import android.os.Environment
@@ -68,14 +70,47 @@ class KModPlugin(private val activity: Activity) : Plugin(activity) {
         Installer.register(activity.applicationContext)
     }
 
+    // Android 11+: "all files access". Older: the ordinary storage permission, which has to be asked for at run time too.
     private fun hasAccess(): Boolean =
-        if (Build.VERSION.SDK_INT >= 30) Environment.isExternalStorageManager() else true
+        if (Build.VERSION.SDK_INT >= 30) Environment.isExternalStorageManager()
+        else activity.checkSelfPermission(Manifest.permission.WRITE_EXTERNAL_STORAGE) == PackageManager.PERMISSION_GRANTED
+
+    private var askedStorage = false
+    private var askedApps = false
+
+    // Many Chinese system builds (vivo, Xiaomi, OPPO…) add a runtime permission for the installed app list; without it the
+    // installer cannot find the game. Where the system does not define it, there is nothing to ask for.
+    private val appListPermission = "com.android.permission.GET_INSTALLED_APPS"
+
+    private fun hasAppList(): Boolean {
+        try {
+            activity.packageManager.getPermissionInfo(appListPermission, 0)
+        } catch (e: PackageManager.NameNotFoundException) {
+            return true
+        }
+        return activity.checkSelfPermission(appListPermission) == PackageManager.PERMISSION_GRANTED
+    }
+
+    @Command
+    fun requestApps(invoke: Invoke) {
+        activity.runOnUiThread {
+            // after a refusal that stops the dialog from appearing: send the player to the app's settings page
+            if (askedApps && !activity.shouldShowRequestPermissionRationale(appListPermission)) {
+                activity.startActivity(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:" + activity.packageName)))
+            } else {
+                askedApps = true
+                activity.requestPermissions(arrayOf(appListPermission), 4712)
+            }
+        }
+        invoke.resolve()
+    }
 
     @Command
     fun info(invoke: Invoke) {
         val args = invoke.parseArgs(PkgArgs::class.java)
         val out = JSObject()
         out.put("access", hasAccess())
+        out.put("apps", hasAppList())
         try {
             val p = activity.packageManager.getPackageInfo(args.pkg, 0)
             out.put("installed", true)
@@ -90,6 +125,16 @@ class KModPlugin(private val activity: Activity) : Plugin(activity) {
     @Command
     fun requestAccess(invoke: Invoke) {
         if (Build.VERSION.SDK_INT < 30) {
+            val write = Manifest.permission.WRITE_EXTERNAL_STORAGE
+            activity.runOnUiThread {
+                // after "don't ask again" the dialog no longer appears: send the player to the app's settings page
+                if (askedStorage && !activity.shouldShowRequestPermissionRationale(write)) {
+                    activity.startActivity(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:" + activity.packageName)))
+                } else {
+                    askedStorage = true
+                    activity.requestPermissions(arrayOf(Manifest.permission.READ_EXTERNAL_STORAGE, write), 4711)
+                }
+            }
             invoke.resolve()
             return
         }
@@ -128,6 +173,32 @@ class KModPlugin(private val activity: Activity) : Plugin(activity) {
             invoke.resolve()
         } catch (e: Exception) {
             invoke.reject(e.message ?: "打不开链接")
+        }
+    }
+
+    /** Hands a downloaded launcher update (inside the app cache) to the system installer. */
+    @Command
+    fun installApk(invoke: Invoke) {
+        val args = invoke.parseArgs(PathArgs::class.java)
+        try {
+            val file = File(args.path).canonicalFile
+            if (!file.path.startsWith(activity.cacheDir.canonicalPath + File.separator) || !file.isFile) {
+                invoke.reject("安装包位置不对")
+                return
+            }
+            if (!Installer.canInstall(activity)) {
+                activity.startActivity(Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES, Uri.parse("package:" + activity.packageName)))
+                invoke.reject("请先允许 KMod Launcher 安装应用，返回后再点一次“更新”")
+                return
+            }
+            val uri = FileProvider.getUriForFile(activity, activity.packageName + ".fileprovider", file)
+            val i = Intent(Intent.ACTION_VIEW)
+            i.setDataAndType(uri, "application/vnd.android.package-archive")
+            i.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_ACTIVITY_NEW_TASK)
+            activity.startActivity(i)
+            invoke.resolve()
+        } catch (e: Exception) {
+            invoke.reject("打不开系统安装器：" + e.message)
         }
     }
 

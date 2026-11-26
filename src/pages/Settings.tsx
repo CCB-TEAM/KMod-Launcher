@@ -4,15 +4,16 @@ import { useToast } from "../toast";
 import type { Shared } from "../App";
 import GamePicker from "./GamePicker";
 import ThemeSettings from "./ThemeSettings";
-import { GH_PROXY } from "./Route";
+import { GH_PROXIES, cleanMirror } from "./Route";
 
-export default function Settings({ config, setConfig, platform }: Shared) {
+export default function Settings({ config, setConfig, platform, checkUpdate }: Shared) {
   const android = platform === "android";
   const toast = useToast();
   const [proxy, setProxy] = useState(config.proxy);
   const [mirror, setMirror] = useState(config.mirror);
   const [pkg, setPkg] = useState(config.package);
   const [index, setIndex] = useState(config.index_url);
+  const [checking, setChecking] = useState(false);
 
   const save = async () => {
     try {
@@ -49,9 +50,11 @@ export default function Settings({ config, setConfig, platform }: Shared) {
           <input value={mirror} placeholder="留空则直连" onChange={(e) => setMirror(e.target.value)} />
         </label>
         <div className="row">
-          <button className={mirror.trim() === GH_PROXY ? "pill on" : "pill"} onClick={() => setMirror(mirror.trim() === GH_PROXY ? "" : GH_PROXY)}>
-            使用 gh-proxy.com
-          </button>
+          {GH_PROXIES.map((u) => (
+            <button key={u} className={cleanMirror(mirror) === u ? "pill on" : "pill"} onClick={() => setMirror(cleanMirror(mirror) === u ? "" : u)}>
+              使用 {u.replace("https://", "")}
+            </button>
+          ))}
         </div>
         <p className="muted small">代理前缀加在 GitHub 地址前面，用于下载文件；版本列表先直连 GitHub，失败时才经过代理。下载的文件按 GitHub 给出的 SHA-256 校验。</p>
         <label className="field">
@@ -66,7 +69,19 @@ export default function Settings({ config, setConfig, platform }: Shared) {
       </section>
       <section className="card">
         <h2>关于</h2>
-        <p className="muted">KMod Launcher 1.1.0 · MIT 许可证。KARDS 属于其所有者，本项目与其没有隶属关系。</p>
+        <p className="muted">KMod Launcher 1.2.0 · MIT 许可证。KARDS 属于其所有者，本项目与其没有隶属关系。</p>
+        <div className="row">
+          <button
+            disabled={checking}
+            onClick={() => {
+              setChecking(true);
+              void checkUpdate().finally(() => setChecking(false));
+            }}
+          >
+            {checking ? "检查中…" : "检查更新"}
+          </button>
+          <button onClick={() => void setConfig({ ...config, onboarded: false }).catch((e) => toast("err", errText(e)))}>重新查看启动引导</button>
+        </div>
       </section>
     </div>
   );

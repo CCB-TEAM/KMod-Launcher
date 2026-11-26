@@ -9,10 +9,12 @@ mod net;
 mod pakmods;
 mod paks;
 mod paths;
+mod selfupdate;
 mod store;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    selfupdate::clean_up();
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         .plugin(android::plugin())
@@ -24,6 +26,7 @@ pub fn run() {
             commands::platform,
             commands::android_info,
             commands::android_request_access,
+            commands::android_request_apps,
             commands::android_pick,
             commands::android_installer,
             commands::get_config,
@@ -48,6 +51,8 @@ pub fn run() {
             commands::get_icon,
             commands::set_icon,
             commands::reset_icon,
+            commands::check_update,
+            commands::install_update,
         ])
         .run(tauri::generate_context!())
         .expect("failed to start KMod Launcher");

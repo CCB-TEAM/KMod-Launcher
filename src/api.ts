@@ -12,6 +12,8 @@ export interface Config {
   custom_themes: unknown[];
   icon: string;
   package: string;
+  /** the first-start guide has been finished or skipped */
+  onboarded: boolean;
 }
 
 export interface InstallState {
@@ -28,6 +30,16 @@ export interface Asset {
   size: number;
   flavor: "release" | "dev";
   digest: string;
+}
+
+/** A newer version of the launcher itself. */
+export interface Update {
+  version: string;
+  notes: string;
+  page: string;
+  size: number;
+  /** false: only the release page can be offered */
+  installable: boolean;
 }
 
 export interface Release {
@@ -102,6 +114,8 @@ export interface PakPlan {
 
 export interface AndroidInfo {
   access: boolean;
+  /** the installed app list can be read */
+  apps: boolean;
   installed: boolean;
   version: string;
 }
@@ -140,6 +154,7 @@ export const api = {
   platform: () => invoke<Platform>("platform"),
   androidInfo: () => invoke<AndroidInfo>("android_info"),
   androidRequestAccess: () => invoke<void>("android_request_access"),
+  androidRequestApps: () => invoke<void>("android_request_apps"),
   androidInstaller: <T>(cmd: string, args: Record<string, unknown> = {}) => invoke<T>("android_installer", { cmd, args }),
   androidPick: (exts: string[]) => invoke<string[]>("android_pick", { exts }),
   getConfig: () => invoke<Config>("get_config"),
@@ -167,6 +182,8 @@ export const api = {
   getIcon: () => invoke<string | null>("get_icon"),
   setIcon: (source: string) => invoke<void>("set_icon", { source }),
   resetIcon: () => invoke<void>("reset_icon"),
+  checkUpdate: () => invoke<Update | null>("check_update"),
+  installUpdate: () => invoke<void>("install_update"),
 };
 
 export interface Progress {

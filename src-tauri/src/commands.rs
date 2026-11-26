@@ -3,7 +3,7 @@ use crate::game::{self, EXE};
 use crate::install::{self, InstallState};
 use crate::mods::{self, ModInfo};
 use crate::net::{self, Release};
-use crate::{android, pakmods, paks, paths, store};
+use crate::{android, pakmods, paks, paths, selfupdate, store};
 use tauri::AppHandle;
 
 #[cfg(windows)]
@@ -124,6 +124,11 @@ pub async fn android_request_access(app: AppHandle) -> Result<(), String> {
     blocking(move || android::request_access(&app)).await
 }
 
+#[tauri::command]
+pub async fn android_request_apps(app: AppHandle) -> Result<(), String> {
+    blocking(move || android::request_apps(&app)).await
+}
+
 /// System file picker (Android). Returns paths of copies in the app cache.
 #[tauri::command]
 pub async fn android_pick(app: AppHandle, exts: Vec<String>) -> Result<Vec<String>, String> {
@@ -148,6 +153,26 @@ pub async fn android_installer(app: AppHandle, cmd: String, args: serde_json::Va
         return Err("未知的安装器命令".into());
     }
     blocking(move || android::installer(&app, &cmd, args)).await
+}
+
+#[tauri::command]
+pub async fn check_update(app: AppHandle) -> Result<Option<selfupdate::Update>, String> {
+    let cfg = config::load(&app);
+    blocking(move || selfupdate::check(&cfg)).await
+}
+
+/// Windows: replaces this program and restarts it. Android: opens the system installer with the new APK.
+#[tauri::command]
+pub async fn install_update(app: AppHandle) -> Result<(), String> {
+    let cfg = config::load(&app);
+    let handle = app.clone();
+    let file = blocking(move || selfupdate::fetch(&handle, &cfg)).await?;
+    if cfg!(target_os = "android") {
+        return android::install_apk(&app, &file.to_string_lossy());
+    }
+    std::process::Command::new(&file).spawn().map_err(|e| format!("新版本已装好，但没能启动它：{e}"))?;
+    app.exit(0);
+    Ok(())
 }
 
 #[tauri::command]

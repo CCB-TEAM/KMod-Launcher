@@ -10,7 +10,7 @@ export default function TitleBar({ iconUrl }: { iconUrl: string }) {
       <div className="tb-title" data-tauri-drag-region>
         <img className="tb-icon" src={iconUrl || "/icon.png"} alt="" />
         <span data-tauri-drag-region>KMod Launcher</span>
-        <small data-tauri-drag-region>1.1.0</small>
+        <small data-tauri-drag-region>1.2.0</small>
       </div>
       <div className="tb-btns">
         <button aria-label="最小化" onClick={run((w) => w.minimize())}>

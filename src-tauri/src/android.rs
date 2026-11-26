@@ -9,6 +9,8 @@ use tauri::{plugin::TauriPlugin, AppHandle, Wry};
 pub struct AndroidInfo {
     /// "All files access" is granted: needed to read and write the game's Android/media folder.
     pub access: bool,
+    /// The installed app list can be read (needed by the built-in installer).
+    pub apps: bool,
     /// The patched game is installed.
     pub installed: bool,
     pub version: String,
@@ -48,11 +50,17 @@ mod imp {
     pub fn request_access(app: &AppHandle) -> Result<(), String> {
         call::<serde_json::Value>(app, "requestAccess", json!({})).map(|_| ())
     }
+    pub fn request_apps(app: &AppHandle) -> Result<(), String> {
+        call::<serde_json::Value>(app, "requestApps", json!({})).map(|_| ())
+    }
     pub fn launch(app: &AppHandle, pkg: &str) -> Result<(), String> {
         call::<serde_json::Value>(app, "launch", json!({ "pkg": pkg })).map(|_| ())
     }
     pub fn open_url(app: &AppHandle, url: &str) -> Result<(), String> {
         call::<serde_json::Value>(app, "openUrl", json!({ "url": url })).map(|_| ())
+    }
+    pub fn install_apk(app: &AppHandle, path: &str) -> Result<(), String> {
+        call::<serde_json::Value>(app, "installApk", json!({ "path": path })).map(|_| ())
     }
     /// Commands of the built-in installer (names are checked by the caller).
     pub fn installer(app: &AppHandle, cmd: &str, args: serde_json::Value) -> Result<serde_json::Value, String> {
@@ -78,10 +86,16 @@ mod imp {
     pub fn request_access(_: &AppHandle) -> Result<(), String> {
         Err(NO.into())
     }
+    pub fn request_apps(_: &AppHandle) -> Result<(), String> {
+        Err(NO.into())
+    }
     pub fn launch(_: &AppHandle, _: &str) -> Result<(), String> {
         Err(NO.into())
     }
     pub fn open_url(_: &AppHandle, _: &str) -> Result<(), String> {
+        Err(NO.into())
+    }
+    pub fn install_apk(_: &AppHandle, _: &str) -> Result<(), String> {
         Err(NO.into())
     }
     pub fn installer(_: &AppHandle, _: &str, _: serde_json::Value) -> Result<serde_json::Value, String> {

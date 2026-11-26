@@ -11,6 +11,8 @@
     <!-- the built-in installer lists installed Unreal games, replaces the original and installs the injected one -->
     <uses-permission android:name="android.permission.QUERY_ALL_PACKAGES" />
     <uses-permission android:name="android.permission.REQUEST_DELETE_PACKAGES" />
+    <!-- Chinese system builds ask the user separately before an app may read the list of installed apps -->
+    <uses-permission android:name="com.android.permission.GET_INSTALLED_APPS" />
 
     <!-- see / launch the patched game -->
     <queries>

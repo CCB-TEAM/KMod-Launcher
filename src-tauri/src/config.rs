@@ -28,6 +28,8 @@ pub struct Config {
     pub icon: String,
     /// Android: package name of the patched game.
     pub package: String,
+    /// The first-start guide has been finished or skipped.
+    pub onboarded: bool,
 }
 
 impl Default for Config {
@@ -43,6 +45,7 @@ impl Default for Config {
             custom_themes: Vec::new(),
             icon: String::new(),
             package: DEFAULT_PACKAGE.into(),
+            onboarded: false,
         }
     }
 }
@@ -57,11 +60,30 @@ pub fn load(app: &AppHandle) -> Config {
     path(app)
         .ok()
         .and_then(|p| std::fs::read_to_string(p).ok())
-        .and_then(|s| serde_json::from_str(s.trim_start_matches('\u{feff}')).ok())
+        .and_then(|s| parse(&s))
         .unwrap_or_default()
+}
+
+fn parse(text: &str) -> Option<Config> {
+    let mut v: serde_json::Value = serde_json::from_str(text.trim_start_matches('\u{feff}')).ok()?;
+    // settings written before the guide existed belong to someone who has been using the launcher: do not show it
+    v.as_object_mut()?.entry("onboarded").or_insert(true.into());
+    serde_json::from_value(v).ok()
 }
 
 pub fn save(app: &AppHandle, cfg: &Config) -> Result<(), String> {
     let text = serde_json::to_string_pretty(cfg).map_err(|e| e.to_string())?;
     std::fs::write(path(app)?, text).map_err(|e| e.to_string())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn only_a_first_start_sees_the_guide() {
+        assert!(!Config::default().onboarded);
+        assert!(parse(r#"{"theme":"ocean"}"#).unwrap().onboarded);
+        assert!(!parse(r#"{"onboarded":false}"#).unwrap().onboarded);
+    }
 }

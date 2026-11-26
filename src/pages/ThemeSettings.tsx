@@ -12,19 +12,7 @@ import {
   parseTheme,
   type Theme,
 } from "../themes";
-
-function Preview({ t }: { t: Theme }) {
-  const c = t.colors;
-  return (
-    <div className="tprev" style={{ background: c.bg, borderRadius: t.radius }}>
-      <i style={{ background: c.glow1, width: 46, height: 46, right: -8, top: -14 }} />
-      <i style={{ background: c.glow2, width: 40, height: 40, right: 20, bottom: -20 }} />
-      <i style={{ background: c.glow3, width: 36, height: 36, left: -10, bottom: -16 }} />
-      <b style={{ background: c.accent }} />
-      <em style={{ background: c.btn }} />
-    </div>
-  );
-}
+import ThemeGrid from "./ThemeGrid";
 
 export default function ThemeSettings({ config, setConfig }: Pick<Shared, "config" | "setConfig">) {
   const toast = useToast();
@@ -127,17 +115,7 @@ export default function ThemeSettings({ config, setConfig }: Pick<Shared, "confi
         </div>
       )}
 
-      <div className="themes">
-        {themes.map((t) => (
-          <button key={t.id} className={t.id === current.id && !draft ? "tcard on" : "tcard"} onClick={() => choose(t.id)} disabled={!!draft}>
-            <Preview t={t} />
-            <div className="tname">
-              <span>{t.name}</span>
-              {!t.builtin && <span className="chip">自定义</span>}
-            </div>
-          </button>
-        ))}
-      </div>
+      <ThemeGrid themes={themes} current={current.id} disabled={!!draft} onPick={choose} />
 
       {!draft && (
         <div className="row">
