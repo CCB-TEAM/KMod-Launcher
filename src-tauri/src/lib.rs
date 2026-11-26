@@ -6,8 +6,10 @@ mod icon;
 mod install;
 mod mods;
 mod net;
+mod pakmods;
 mod paks;
 mod paths;
+mod store;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -37,6 +39,8 @@ pub fn run() {
             commands::list_mods,
             commands::set_mod_enabled,
             commands::install_mod,
+            commands::fetch_catalog,
+            commands::install_remote,
             commands::delete_mod,
             commands::read_log,
             commands::open_path,

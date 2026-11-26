@@ -7,6 +7,7 @@ export interface Config {
   prereleases: boolean;
   proxy: string;
   mirror: string;
+  index_url: string;
   theme: string;
   custom_themes: unknown[];
   icon: string;
@@ -26,6 +27,7 @@ export interface Asset {
   url: string;
   size: number;
   flavor: "release" | "dev";
+  digest: string;
 }
 
 export interface Release {
@@ -37,7 +39,41 @@ export interface Release {
   assets: Asset[];
 }
 
+export interface CatalogVersion {
+  version: string;
+  url: string;
+  sha256: string;
+  size: number;
+  published?: string;
+  platforms?: string[];
+  native?: boolean;
+  permissions?: string[];
+  depends?: string[];
+  paks?: boolean;
+}
+
+export interface CatalogMod {
+  id: string;
+  name: string;
+  author: string;
+  description: string;
+  icon?: string | null;
+  cover?: string | null;
+  repo?: string;
+  stars?: number;
+  updated?: string;
+  verified?: boolean;
+  versions: CatalogVersion[];
+}
+
+export interface Catalog {
+  mods: CatalogMod[];
+  blocked: string[];
+  errors: string[];
+}
+
 export interface ModInfo {
+  icon: string;
   id: string;
   name: string;
   version: string;
@@ -48,6 +84,17 @@ export interface ModInfo {
   pack: "folder" | "kmod" | "pak";
   file: string;
   pending: boolean;
+  /** pak files this mod installed that are still there */
+  paks: string[];
+}
+
+/** What installing a package would do to pak files: the player is asked before anything is overwritten or removed. */
+export interface PakPlan {
+  name: string;
+  version: string;
+  write: string[];
+  remove: string[];
+  conflicts: string[];
 }
 
 export interface AndroidInfo {
@@ -101,12 +148,16 @@ export const api = {
   getInstalled: () => invoke<InstallState>("get_installed"),
   listReleases: () => invoke<Release[]>("list_releases"),
   installLoader: (a: Asset, tag: string, replaceForeign: boolean) =>
-    invoke<void>("install_loader", { url: a.url, size: a.size, tag, flavor: a.flavor, replaceForeign }),
+    invoke<void>("install_loader", { url: a.url, size: a.size, digest: a.digest, tag, flavor: a.flavor, replaceForeign }),
   uninstallLoader: (removeData: boolean) => invoke<void>("uninstall_loader", { removeData }),
   listMods: () => invoke<ModInfo[]>("list_mods"),
   setModEnabled: (id: string, enabled: boolean, kind: string) => invoke<void>("set_mod_enabled", { id, enabled, kind }),
-  installMod: (source: string) => invoke<string>("install_mod", { source }),
-  deleteMod: (file: string, id: string, kind: string, pending: boolean) => invoke<void>("delete_mod", { file, id, kind, pending }),
+  installMod: (source: string, allowNative = false, allowPaks = false) => invoke<string>("install_mod", { source, allowNative, allowPaks }),
+  fetchCatalog: () => invoke<Catalog>("fetch_catalog"),
+  installRemote: (id: string, v: CatalogVersion, allowNative: boolean, allowPaks = false) =>
+    invoke<string>("install_remote", { id, url: v.url, sha256: v.sha256, size: v.size, allowNative, allowPaks }),
+  deleteMod: (file: string, id: string, kind: string, pending: boolean, deletePaks = false) =>
+    invoke<void>("delete_mod", { file, id, kind, pending, deletePaks }),
   readLog: (name: "kmod" | "proxy") => invoke<string>("read_log", { name }),
   openPath: (which: Folder) => invoke<void>("open_path", { which }),
   openUrl: (url: string) => invoke<void>("open_url", { url }),
@@ -124,6 +175,12 @@ export interface Progress {
 export const onProgress = (fn: (p: Progress) => void) => listen<Progress>("install-progress", (e) => fn(e.payload));
 
 export const errText = (e: unknown) => (typeof e === "string" ? e : e instanceof Error ? e.message : JSON.stringify(e));
+
+/** The plan behind a "PAK_CONFIRM:{…}" error, else null. */
+export const pakPlan = (e: unknown): PakPlan | null => {
+  const t = errText(e);
+  return t.startsWith("PAK_CONFIRM:") ? (JSON.parse(t.slice("PAK_CONFIRM:".length)) as PakPlan) : null;
+};
 
 export const fmtSize = (n: number) =>
   n >= 1048576 ? `${(n / 1048576).toFixed(1)} MB` : `${Math.max(1, Math.round(n / 1024))} KB`;

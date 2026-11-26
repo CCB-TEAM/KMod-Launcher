@@ -1,10 +1,12 @@
 import { useCallback, useEffect, useState } from "react";
 import { open } from "@tauri-apps/plugin-dialog";
 import { pickFiles } from "../pick";
-import { api, errText, type ModInfo } from "../api";
+import { api, errText, pakPlan, type ModInfo, type PakPlan } from "../api";
 import { useToast } from "../toast";
 import type { Shared } from "../App";
 import { IconSearch } from "../Icons";
+import NativeWarning from "../NativeWarning";
+import { DeleteWithPaks, PakWarning } from "../PakDialogs";
 
 const KIND_LABEL = { lua: "Lua", native: "原生 C++", pak: "Pak" } as const;
 
@@ -14,6 +16,33 @@ export default function Mods({ state, platform }: Shared) {
   const [mods, setMods] = useState<ModInfo[] | null>(null);
   const [q, setQ] = useState("");
   const [type, setType] = useState<"all" | ModInfo["kind"]>("all");
+  const [asking, setAsking] = useState<{ name: string; answer: (ok: boolean) => void } | null>(null);
+
+  const [pakAsk, setPakAsk] = useState<{ plan: PakPlan; answer: (ok: boolean) => void } | null>(null);
+  const [removing, setRemoving] = useState<ModInfo | null>(null);
+
+  /** Installs a file or folder; asks first for a native mod and before pak files are overwritten. */
+  const installOne = async (path: string) => {
+    const name = path.split(/[\\/]/).pop() ?? path;
+    let native = false;
+    let paks = false;
+    for (;;) {
+      try {
+        return toast("ok", `已安装 ${await api.installMod(path, native, paks)}`);
+      } catch (e) {
+        const plan = pakPlan(e);
+        if (errText(e) === "NATIVE_CONFIRM" && !native) {
+          native = await new Promise<boolean>((answer) => setAsking({ name, answer }));
+          setAsking(null);
+          if (!native) return;
+        } else if (plan && !paks) {
+          paks = await new Promise<boolean>((answer) => setPakAsk({ plan, answer }));
+          setPakAsk(null);
+          if (!paks) return;
+        } else return toast("err", errText(e));
+      }
+    }
+  };
 
   const load = useCallback(async () => {
     try {
@@ -45,35 +74,36 @@ export default function Mods({ state, platform }: Shared) {
       toast("err", errText(e));
       return;
     }
-    for (const path of files) {
-      try {
-        toast("ok", `已安装 ${await api.installMod(path)}`);
-      } catch (e) {
-        toast("err", errText(e));
-      }
-    }
+    for (const path of files) await installOne(path);
     await load();
   };
 
   const addFolder = async () => {
     const d = await open({ directory: true, title: "选择模组文件夹（里面要有 mod.json）" });
     if (typeof d !== "string") return;
-    try {
-      toast("ok", `已安装 ${await api.installMod(d)}`);
-    } catch (e) {
-      toast("err", errText(e));
-    }
+    await installOne(d);
     await load();
   };
 
-  const remove = async (m: ModInfo) => {
-    if (!confirm(`删除模组“${m.name}”？`)) return;
+  const remove = async (m: ModInfo, deletePaks?: boolean) => {
+    if (deletePaks === undefined) {
+      if (m.paks.length) return setRemoving(m);
+      if (!confirm(`删除模组“${m.name}”？`)) return;
+    }
+    setRemoving(null);
     try {
-      await api.deleteMod(m.file, m.id, m.kind, m.pending);
+      await api.deleteMod(m.file, m.id, m.kind, m.pending, !!deletePaks);
       await load();
     } catch (e) {
       toast("err", errText(e));
     }
+  };
+
+  const [refreshing, setRefreshing] = useState(false);
+  const refresh = async () => {
+    setRefreshing(true);
+    await load();
+    setRefreshing(false);
   };
 
   const needle = q.trim().toLowerCase();
@@ -85,6 +115,9 @@ export default function Mods({ state, platform }: Shared) {
 
   return (
     <div className="page">
+      {asking && <NativeWarning mod={{ name: asking.name }} onCancel={() => asking.answer(false)} onConfirm={() => asking.answer(true)} />}
+      {pakAsk && <PakWarning plan={pakAsk.plan} onCancel={() => pakAsk.answer(false)} onConfirm={() => pakAsk.answer(true)} />}
+      {removing && <DeleteWithPaks name={removing.name} paks={removing.paks} onCancel={() => setRemoving(null)} onConfirm={(also) => void remove(removing, also)} />}
       <div className="head">
         <div>
           <h1>模组管理</h1>
@@ -98,6 +131,7 @@ export default function Mods({ state, platform }: Shared) {
         </label>
         <div className="row">
           <button className="primary" onClick={add}>安装模组</button>
+          <button disabled={refreshing} onClick={() => void refresh()}>{refreshing ? "刷新中…" : "刷新"}</button>
           {!android && <button onClick={addFolder}>安装文件夹</button>}
           {!android && <button onClick={() => api.openPath("mods")}>Mods 文件夹</button>}
           {!android && <button onClick={() => api.openPath("paks")}>Paks 文件夹</button>}
@@ -117,22 +151,28 @@ export default function Mods({ state, platform }: Shared) {
       {mods?.length === 0 && <p className="muted">还没有模组。点「安装模组」选一个 .kmod 或 .pak 文件。</p>}
       <div className="list">
         {shown?.map((m) => (
-          <div key={`${m.kind}:${m.file}`} className={`mod k-${m.kind}`}>
-            <button className={m.enabled ? "pill on" : "pill"} onClick={() => toggle(m)} disabled={m.pending}>
-              {m.enabled ? "已启用" : "已禁用"}
-            </button>
-            <div className="info">
-              <div>
-                <span className={`kind ${m.kind}`}>{KIND_LABEL[m.kind]}</span>
+          <div key={`${m.kind}:${m.file}`} className={`mod k-${m.kind}${m.enabled ? "" : " off"}`}>
+            <div className="mod-head">
+              {m.icon && <img className="modicon" src={m.icon} alt="" />}
+              <div className="mod-title">
                 <b>{m.name}</b>
-                <span className="muted small"> {m.version}</span>
-                {m.author && <span className="chip">{m.author}</span>}
-                {m.pack === "folder" && <span className="chip">文件夹</span>}
-                {m.pending && <span className="chip wait">下次启动游戏时安装</span>}
+                <div className="mod-meta">
+                  <span className={`kind ${m.kind}`}>{KIND_LABEL[m.kind]}</span>
+                  {m.version && <span>{m.version}</span>}
+                  {m.author && <span>{m.author}</span>}
+                  {m.pack === "folder" && <span className="chip">文件夹</span>}
+                  {m.paks.length > 0 && <span className="chip">含 Pak</span>}
+                  {m.pending && <span className="chip wait">下次启动游戏时安装</span>}
+                </div>
               </div>
-              <div className="muted small">{m.description || m.id}</div>
+              <button className={m.enabled ? "pill on" : "pill"} onClick={() => toggle(m)} disabled={m.pending}>
+                {m.enabled ? "已启用" : "已禁用"}
+              </button>
             </div>
-            <button className="ghost danger" onClick={() => remove(m)}>删除</button>
+            <div className="mod-foot">
+              <p>{m.description || m.id}</p>
+              <button className="ghost danger small" onClick={() => void remove(m)}>删除</button>
+            </div>
           </div>
         ))}
       </div>

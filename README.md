@@ -1,25 +1,34 @@
 # KMod Launcher
 
-KMod Launcher installs and manages the [KMod loader](https://github.com/CCB-TEAM/KMod-Loader-Windows) for KARDS on Windows.
+KARDS 的 [KMod 加载器](https://github.com/CCB-TEAM/KMod-Loader-Windows)安装器与模组管理器，支持 Windows 和 Android。
 
-- Finds KARDS in your Steam libraries (or pick the folder by hand) and launches the game.
-- Installs, updates and uninstalls the loader from GitHub releases (release or dev flavor, pre-releases optional), with SHA-256 of the download.
-- Lists mods, switches them on and off, installs `.kmod` files and mod folders.
-- Shows the loader logs.
+## 功能
 
-The UI is Chinese only for now. Android is not covered yet.
+- **发现**：浏览和下载社区模组（来自 [kmod-index](https://github.com/CCB-TEAM/kmod-index)，可添加其他索引），按 SHA-256 校验；原生 C++ 模组安装前会弹出警告。
+- **模组管理**：Lua、原生 C++、Pak 三类分色显示；启用、停用、安装 `.kmod` 和 `.pak`、删除。
+- **Windows**：在 Steam 库里找到 KARDS，安装、更新、卸载加载器（正式版或开发版），启动游戏。
+- **Android**：内置安装器，把加载器注入手机上已安装的游戏并安装，不需要电脑。
+- GitHub 下载代理（含 gh-proxy.com）、日志查看、主题。
 
-## Development
+界面目前只有中文。
 
-Needs Node.js, pnpm, Rust (stable) and the [Tauri 2 prerequisites](https://v2.tauri.app/start/prerequisites/).
+## 发布自己的模组
+
+给模组仓库加上主题 `kmod-mod`，发一个带 `.kmod` 文件的 Release，约三小时内会出现在“发现”页。说明见 [kmod-index](https://github.com/CCB-TEAM/kmod-index)。
+
+## 开发
+
+需要 Node.js、pnpm、Rust 稳定版和 [Tauri 2 的依赖](https://v2.tauri.app/start/prerequisites/)。
 
 ```powershell
 pnpm install
 pnpm tauri dev
 ```
 
-Build an exe: `pnpm tauri build --no-bundle`.
+- Windows 程序：`pnpm tauri build --no-bundle`
+- Android 安装包：`./scripts/build-android.ps1`（正式版加 `-Release`，需要 Android SDK/NDK 和本地签名密钥）
+- 安装器内置的加载器库在 `src-tauri/gen/android/app/src/main/assets/loader/`
 
-## License
+## 许可证
 
-MIT. KARDS belongs to its owner; this project is not affiliated with it. The interface was inspired by CeleMod, no code was taken from it.
+MIT。KARDS 属于其所有者，本项目与其没有隶属关系。界面风格参考了 CeleMod，没有使用其代码。

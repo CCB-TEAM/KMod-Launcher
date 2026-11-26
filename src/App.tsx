@@ -5,16 +5,18 @@ import { ToastHost, useToast } from "./toast";
 import Home from "./pages/Home";
 import Loader from "./pages/Loader";
 import Mods from "./pages/Mods";
+import Discover from "./pages/Discover";
 import Logs from "./pages/Logs";
 import Settings from "./pages/Settings";
 import Installer from "./pages/Installer";
 import TitleBar from "./TitleBar";
 import { allThemes, applyTheme } from "./themes";
-import { IconHome, IconLoader, IconMods, IconLogs, IconSettings } from "./Icons";
+import { IconHome, IconLoader, IconMods, IconLogs, IconSettings, IconStore } from "./Icons";
 
 const PAGES = [
   { id: "home", label: "主页", Icon: IconHome },
   { id: "loader", label: "加载器", Icon: IconLoader },
+  { id: "store", label: "发现", Icon: IconStore },
   { id: "mods", label: "模组", Icon: IconMods },
   { id: "logs", label: "日志", Icon: IconLogs },
   { id: "settings", label: "设置", Icon: IconSettings },
@@ -165,6 +167,7 @@ function Inner() {
           <main className="content">
             {page === "home" && <Home {...shared} />}
             {page === "loader" && (android ? <Installer {...shared} /> : <Loader {...shared} />)}
+            {page === "store" && <Discover {...shared} />}
             {page === "mods" && <Mods {...shared} />}
             {page === "logs" && <Logs {...shared} />}
             {page === "settings" && <Settings {...shared} />}

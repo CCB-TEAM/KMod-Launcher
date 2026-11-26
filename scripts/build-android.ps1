@@ -22,6 +22,11 @@ if (!$SkipFrontend) {
 }
 
 $project = Join-Path $repo 'src-tauri/gen/android'
+# the Tauri CLI would write the app version for Gradle; without it, derive it from tauri.conf.json here
+$version = (Get-Content "$repo/src-tauri/tauri.conf.json" -Raw | ConvertFrom-Json).version
+$p = $version.Split('-')[0].Split('.')
+$code = [int]$p[0] * 1000000 + [int]$p[1] * 1000 + [int]$p[2]
+Set-Content "$project/app/tauri.properties" "tauri.android.versionName=$version`ntauri.android.versionCode=$code" -Encoding ascii
 $generated = Join-Path $project 'app/src/main/java/team/ccb/kmod_launcher/generated'
 New-Item -ItemType Directory -Force $generated | Out-Null
 $env:TAURI_ANDROID_PROJECT_PATH = $project

@@ -3,7 +3,7 @@ use crate::game::{self, EXE};
 use crate::install::{self, InstallState};
 use crate::mods::{self, ModInfo};
 use crate::net::{self, Release};
-use crate::{android, paks, paths};
+use crate::{android, pakmods, paks, paths, store};
 use tauri::AppHandle;
 
 #[cfg(windows)]
@@ -163,6 +163,7 @@ pub async fn install_loader(
     size: u64,
     tag: String,
     flavor: String,
+    digest: String,
     replace_foreign: bool,
 ) -> Result<(), String> {
     let cfg = config::load(&app);
@@ -175,7 +176,7 @@ pub async fn install_loader(
     if game_running() {
         return Err("游戏正在运行，请先关闭游戏".into());
     }
-    blocking(move || install::install(&app, &cfg, &dir, &url, size, &tag, &flavor, replace_foreign)).await
+    blocking(move || install::install(&app, &cfg, &dir, &url, size, &digest, &tag, &flavor, replace_foreign)).await
 }
 
 #[tauri::command]
@@ -191,7 +192,19 @@ pub fn uninstall_loader(app: AppHandle, remove_data: bool) -> Result<(), String>
 pub fn list_mods(app: AppHandle) -> Result<Vec<ModInfo>, String> {
     let d = paths::dirs(&app)?;
     let mut all = mods::list(&d.kmod);
-    all.extend(paks::list(&d.paks));
+    let mut owned = pakmods::installed(&d.kmod, &d.paks);
+    for m in &mut all {
+        m.paks = owned.remove(&m.id).unwrap_or_default();
+    }
+    let mut paks = paks::list(&d.paks);
+    // say which mod a pak came from
+    for p in &mut paks {
+        let file = format!("{}.pak", p.id);
+        if let Some(owner) = all.iter().find(|m| m.paks.contains(&file)) {
+            p.description = format!("{} · 来自 {}", p.description, owner.name);
+        }
+    }
+    all.extend(paks);
     Ok(all)
 }
 
@@ -208,28 +221,55 @@ pub fn set_mod_enabled(app: AppHandle, id: String, enabled: bool, kind: String) 
 }
 
 #[tauri::command]
-pub fn install_mod(app: AppHandle, source: String) -> Result<String, String> {
+pub async fn install_mod(app: AppHandle, source: String, allow_native: bool, allow_paks: bool) -> Result<String, String> {
     let d = paths::dirs(&app)?;
-    let r = if source.to_lowercase().ends_with(".pak") {
-        paks::install(&d.paks, &source)
-    } else {
-        mods::install(&d.kmod, &source)
-    };
-    // Files the Android picker copied into the cache are ours to clean up.
-    if cfg!(target_os = "android") {
+    let opts = mods::Opts { paks: d.paks.clone(), allow_native, allow_paks, game_running: game_running() };
+    let src = source.clone();
+    // large pak packages take a while to check and unpack
+    let r = blocking(move || {
+        if src.to_lowercase().ends_with(".pak") {
+            paks::install(&opts.paks, &src)
+        } else {
+            mods::install(&d.kmod, &src, &opts)
+        }
+    })
+    .await;
+    // Files the Android picker copied into the cache are ours to clean up (kept while the player is being asked).
+    let asking = r.as_ref().err().is_some_and(|e| e == "NATIVE_CONFIRM" || e.starts_with("PAK_CONFIRM:"));
+    if cfg!(target_os = "android") && !asking {
         let _ = std::fs::remove_file(&source);
     }
     r
 }
 
 #[tauri::command]
-pub fn delete_mod(app: AppHandle, file: String, id: String, kind: String, pending: bool) -> Result<(), String> {
+pub async fn fetch_catalog(app: AppHandle) -> Result<store::Catalog, String> {
+    let cfg = config::load(&app);
+    blocking(move || Ok(store::fetch(&cfg))).await
+}
+
+#[tauri::command]
+pub async fn install_remote(app: AppHandle, id: String, url: String, sha256: String, size: u64, allow_native: bool, allow_paks: bool) -> Result<String, String> {
+    let cfg = config::load(&app);
+    let d = paths::dirs(&app)?;
+    let opts = mods::Opts { paks: d.paks.clone(), allow_native, allow_paks, game_running: game_running() };
+    blocking(move || store::install(&app, &cfg, &d.kmod, store::Wanted { id: &id, url: &url, sha256: &sha256, size }, &opts)).await
+}
+
+#[tauri::command]
+pub fn delete_mod(app: AppHandle, file: String, id: String, kind: String, pending: bool, delete_paks: bool) -> Result<(), String> {
     let d = paths::dirs(&app)?;
     if kind == "pak" {
         if game_running() {
             return Err("游戏正在运行，请先关闭游戏".into());
         }
         return paks::delete(&d.paks, &file);
+    }
+    if delete_paks && game_running() {
+        return Err("游戏正在运行，请先关闭游戏".into());
+    }
+    if mods::valid_id(&id) {
+        pakmods::forget(&d.kmod, &d.paks, &id, delete_paks)?;
     }
     mods::delete(&d.kmod, &file, &id, pending)
 }
@@ -275,7 +315,7 @@ pub fn open_path(app: AppHandle, which: String) -> Result<(), String> {
 
 #[tauri::command]
 pub fn open_url(app: AppHandle, url: String) -> Result<(), String> {
-    if !url.starts_with("https://github.com/CCB-TEAM/") {
+    if !url.starts_with("https://github.com/") {
         return Err("不允许打开这个链接".into());
     }
     if cfg!(target_os = "android") {

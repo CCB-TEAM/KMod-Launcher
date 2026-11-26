@@ -141,6 +141,7 @@ pub fn install(
     win64: &Path,
     url: &str,
     size: u64,
+    digest: &str,
     tag: &str,
     flavor: &str,
     replace_foreign: bool,
@@ -153,6 +154,12 @@ pub fn install(
     }
     emit(app, "download", 0, size);
     let (zip_path, sha) = download(app, cfg, url, size, std::env::temp_dir().join(format!("kmod-launcher-{}.zip", std::process::id())))?;
+    if let Some(want) = digest.strip_prefix("sha256:") {
+        if !want.eq_ignore_ascii_case(&sha) {
+            let _ = std::fs::remove_file(&zip_path);
+            return Err("下载的文件校验不一致（SHA-256），已丢弃。换一条下载线路再试。".into());
+        }
+    }
     let result = (|| {
         emit(app, "extract", 0, 0);
         let file = std::fs::File::open(&zip_path).map_err(|e| e.to_string())?;

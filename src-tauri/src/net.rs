@@ -17,10 +17,11 @@ pub fn agent(cfg: &Config) -> ureq::Agent {
     b.build()
 }
 
-/// Applies the optional mirror prefix to a download URL.
+/// Applies the optional mirror ("GitHub proxy") prefix to a GitHub URL; other addresses are left alone.
 pub fn mirrored(cfg: &Config, url: &str) -> String {
     let m = cfg.mirror.trim();
-    if m.is_empty() {
+    let github = ["https://github.com/", "https://api.github.com/", "https://raw.githubusercontent.com/", "https://objects.githubusercontent.com/"];
+    if m.is_empty() || !github.iter().any(|p| url.starts_with(p)) {
         url.to_string()
     } else {
         format!("{}/{}", m.trim_end_matches('/'), url)
@@ -34,6 +35,8 @@ pub struct Asset {
     pub size: u64,
     /// "release" or "dev"
     pub flavor: String,
+    /// "sha256:<hex>" as GitHub reports it (empty for old releases): the download is checked against it
+    pub digest: String,
 }
 
 #[derive(serde::Serialize, Clone, Debug)]
@@ -62,13 +65,26 @@ fn flavor_of(name: &str) -> Option<&'static str> {
 
 pub fn fetch_releases(cfg: &Config) -> Result<Vec<Release>, String> {
     let url = format!("https://api.github.com/repos/{REPO}/releases?per_page=30");
-    let v: serde_json::Value = agent(cfg)
-        .get(&url)
-        .set("Accept", "application/vnd.github+json")
-        .call()
-        .map_err(|e| format!("无法获取版本列表：{e}"))?
-        .into_json()
-        .map_err(|e| e.to_string())?;
+    // GitHub itself first (its checksums can be trusted most); the proxy only when that fails
+    let get = |url: &str| -> Result<serde_json::Value, String> {
+        agent(cfg)
+            .get(url)
+            .set("Accept", "application/vnd.github+json")
+            .call()
+            .map_err(|e| e.to_string())?
+            .into_json()
+            .map_err(|e| e.to_string())
+    };
+    let v = match get(&url) {
+        Ok(v) => v,
+        Err(direct) => {
+            let through = mirrored(cfg, &url);
+            if through == url {
+                return Err(format!("无法获取版本列表：{direct}。可以试试切换下载线路。"));
+            }
+            get(&through).map_err(|e| format!("无法获取版本列表。直连：{direct}；代理：{e}"))?
+        }
+    };
     let mut out = Vec::new();
     for r in v.as_array().ok_or("版本列表格式不对")? {
         if r["draft"].as_bool().unwrap_or(false) {
@@ -87,6 +103,7 @@ pub fn fetch_releases(cfg: &Config) -> Result<Vec<Release>, String> {
                     url: url.to_string(),
                     size: a["size"].as_u64().unwrap_or(0),
                     flavor: f.to_string(),
+                    digest: a["digest"].as_str().unwrap_or("").to_string(),
                 });
             }
         }

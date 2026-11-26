@@ -78,6 +78,8 @@ pub fn list(paks: &Path) -> Vec<ModInfo> {
             pack: "pak".into(),
             file: stem,
             pending: false,
+            icon: String::new(),
+            paks: Vec::new(),
         });
     }
     out.sort_by(|a, b| a.name.to_lowercase().cmp(&b.name.to_lowercase()));

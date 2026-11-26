@@ -20,10 +20,13 @@ const Hero = ({ iconUrl, pickIcon, resetIcon, platform }: Pick<Shared, "iconUrl"
     </div>
     <div>
       <h1>KMod Launcher</h1>
-      <p>KARDS 的 KMod 加载器安装与模组管理器</p>
+      <p>KARDS 的 KMod 加载器<wbr />安装与模组管理器</p>
     </div>
   </div>
 );
+
+// a package name may break after its dots
+const breakable = (name: string) => name.replace(/\./g, ".\u200b");
 
 export default function Home(p: Shared) {
   const { config, state, go } = p;
@@ -62,7 +65,7 @@ export default function Home(p: Shared) {
         <div className="cards">
           <div className={a?.installed ? "pcard on" : "pcard"}>
             <b>{a?.installed ? `已安装${a.version ? " " + a.version : ""}` : "没有找到游戏"}</b>
-            <small>{a?.installed ? config.package : `没有找到 ${config.package}，先到「安装器」给 KARDS 注入 kmod`}</small>
+            <small>{a?.installed ? breakable(config.package) : `没有找到 ${breakable(config.package)}，先到「安装器」给 KARDS 注入 kmod`}</small>
           </div>
           <button className="pcard action" onClick={launchA} disabled={!a?.installed}>
             <b>启动游戏</b>

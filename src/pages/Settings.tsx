@@ -4,6 +4,7 @@ import { useToast } from "../toast";
 import type { Shared } from "../App";
 import GamePicker from "./GamePicker";
 import ThemeSettings from "./ThemeSettings";
+import { GH_PROXY } from "./Route";
 
 export default function Settings({ config, setConfig, platform }: Shared) {
   const android = platform === "android";
@@ -11,10 +12,11 @@ export default function Settings({ config, setConfig, platform }: Shared) {
   const [proxy, setProxy] = useState(config.proxy);
   const [mirror, setMirror] = useState(config.mirror);
   const [pkg, setPkg] = useState(config.package);
+  const [index, setIndex] = useState(config.index_url);
 
   const save = async () => {
     try {
-      await setConfig({ ...config, proxy: proxy.trim(), mirror: mirror.trim(), package: pkg.trim() });
+      await setConfig({ ...config, proxy: proxy.trim(), mirror: mirror.trim(), package: pkg.trim(), index_url: index.trim() });
       toast("ok", "已保存");
     } catch (e) {
       toast("err", errText(e));
@@ -43,10 +45,19 @@ export default function Settings({ config, setConfig, platform }: Shared) {
           </label>
         )}
         <label className="field">
-          <span>下载镜像前缀</span>
-          <input value={mirror} placeholder="加在 GitHub 下载地址前面的镜像，留空则直连" onChange={(e) => setMirror(e.target.value)} />
+          <span>GitHub 代理前缀</span>
+          <input value={mirror} placeholder="留空则直连" onChange={(e) => setMirror(e.target.value)} />
         </label>
-        <p className="muted small">版本列表通过 GitHub API 获取，只走代理；镜像只用于下载压缩包。</p>
+        <div className="row">
+          <button className={mirror.trim() === GH_PROXY ? "pill on" : "pill"} onClick={() => setMirror(mirror.trim() === GH_PROXY ? "" : GH_PROXY)}>
+            使用 gh-proxy.com
+          </button>
+        </div>
+        <p className="muted small">代理前缀加在 GitHub 地址前面，用于下载文件；版本列表先直连 GitHub，失败时才经过代理。下载的文件按 GitHub 给出的 SHA-256 校验。</p>
+        <label className="field">
+          <span>模组索引地址</span>
+          <textarea className="short" value={index} placeholder="留空使用官方索引；可以每行填一个" onChange={(e) => setIndex(e.target.value)} />
+        </label>
         <div className="row">
           <button className="primary" onClick={save}>
             保存
@@ -55,7 +66,7 @@ export default function Settings({ config, setConfig, platform }: Shared) {
       </section>
       <section className="card">
         <h2>关于</h2>
-        <p className="muted">KMod Launcher 0.1.0 · MIT 许可证。KARDS 属于其所有者，本项目与其没有隶属关系。</p>
+        <p className="muted">KMod Launcher 1.0.0 · MIT 许可证。KARDS 属于其所有者，本项目与其没有隶属关系。</p>
       </section>
     </div>
   );

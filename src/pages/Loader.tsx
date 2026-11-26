@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { api, errText, fmtSize, onProgress, type Asset, type Progress, type Release } from "../api";
 import { useToast } from "../toast";
 import type { Shared } from "../App";
+import Route from "./Route";
 
 export default function Loader({ config, setConfig, state, refresh, platform }: Shared) {
   const android = platform === "android";
@@ -157,6 +158,7 @@ export default function Loader({ config, setConfig, state, refresh, platform }: 
             <button onClick={load}>刷新</button>
           </div>
         </div>
+        <Route config={config} setConfig={setConfig} onChange={load} />
         {error && <p className="err">{error}</p>}
         {!error && !releases && <p className="muted">正在获取…</p>}
         {releases?.length === 0 && <p className="muted">没有可用的版本。</p>}

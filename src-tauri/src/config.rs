@@ -18,6 +18,8 @@ pub struct Config {
     pub proxy: String,
     /// Optional prefix put in front of GitHub download URLs (a mirror).
     pub mirror: String,
+    /// Mod catalogue addresses, one per line; empty = the official index.
+    pub index_url: String,
     /// Id of the selected theme (built-in or one of `custom_themes`).
     pub theme: String,
     /// User-made themes; the frontend owns their shape.
@@ -36,6 +38,7 @@ impl Default for Config {
             prereleases: true,
             proxy: String::new(),
             mirror: String::new(),
+            index_url: String::new(),
             theme: "violet".into(),
             custom_themes: Vec::new(),
             icon: String::new(),
