@@ -41,7 +41,7 @@ export default function Mods({ state, platform, ainfo }: Shared) {
   const load = useCallback(async () => {
     try {
       const list = await api.listMods();
-      const o = android ? await api.pakOrder().catch(() => []) : [];
+      const o = await api.pakOrder().catch(() => []);
       if (!alive.current) return;
       setMods(list);
       setOrder(o);
@@ -49,7 +49,7 @@ export default function Mods({ state, platform, ainfo }: Shared) {
       toast("err", errText(e));
       setMods([]);
     }
-  }, [toast, android]);
+  }, [toast]);
 
   const checkUpdates = useCallback(
     async (fresh: boolean, quiet = false) => {
@@ -180,8 +180,8 @@ export default function Mods({ state, platform, ainfo }: Shared) {
       await api.setPakOrder(next);
     } catch (e) {
       toast("err", errText(e));
-      void load();
     }
+    if (!android) void load();          // the files were renamed
   };
 
   const refresh = async () => {
@@ -202,7 +202,7 @@ export default function Mods({ state, platform, ainfo }: Shared) {
   const needle = q.trim().toLowerCase();
   const count = (t: Tab) => (t === "all" ? mods?.length ?? 0 : t === "updates" ? updates.length : mods?.filter((m) => m.kind === t).length ?? 0);
   const pakRank = (m: ModInfo) => order.indexOf(`${m.file}.pak`);
-  const ordering = android && tab === "pak" && !needle;
+  const ordering = tab === "pak" && !needle;
   const shown = (mods ?? [])
     .filter((m) => (tab === "all" ? true : tab === "updates" ? !!updateOf(m) : m.kind === tab))
     .filter((m) => !needle || `${m.name} ${m.id} ${m.author} ${m.description}`.toLowerCase().includes(needle));
@@ -267,11 +267,11 @@ export default function Mods({ state, platform, ainfo }: Shared) {
       {!android && !state?.installed && <p className="note">加载器还没有安装，Lua 和原生模组在安装后才会生效（Pak 模组由游戏自己加载，不依赖加载器）。</p>}
       {tab === "pak" && (
         <p className="note">
-          {android
-            ? needle
-              ? "清空搜索后可以调整加载顺序。"
-              : "按加载顺序排列：越靠下越晚加载，多个 Pak 改了同一个资源时以下面的为准。顺序在下次启动游戏时生效。"
-            : "电脑版的 Pak 由游戏自己加载，顺序由游戏按文件名决定，暂不能在这里调整。"}
+          {needle
+            ? "清空搜索后可以调整加载顺序。"
+            : android
+              ? "按加载顺序排列：越靠下越晚加载，多个 Pak 改了同一个资源时以下面的为准。顺序在下次启动游戏时生效。"
+              : "按优先级排列：越靠下优先级越高，多个 Pak 改了同一个资源时以下面的为准。游戏按文件名决定优先级，所以调整顺序会把文件改名为「原名.kmod_序号_P.pak」。要在游戏关闭时调整。"}
         </p>
       )}
 
@@ -342,7 +342,7 @@ export default function Mods({ state, platform, ainfo }: Shared) {
           {checking ? "正在检查更新…" : checked && !!mods?.length && !updates.length ? "已检查更新：模组都是最新的。" : ""}
           {android
             ? "Lua / 原生模组在下次启动游戏时生效，游戏里的 Mods 页也可以即时切换；Pak 模组的启用、停用、删除和顺序要在游戏关闭时调整，改完需重启游戏。"
-            : "Lua / 原生模组的启用状态在下次启动游戏时生效，游戏里的 Mods 页也可以即时切换；Pak 模组要在游戏关闭时启用、停用或删除。"}
+            : "Lua / 原生模组的启用状态在下次启动游戏时生效，游戏里的 Mods 页也可以即时切换；Pak 模组要在游戏关闭时启用、停用、删除或调整顺序。"}
         </p>
         {!android && (
           <div className="row">

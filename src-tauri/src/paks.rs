@@ -3,6 +3,7 @@
 //! A pak is turned off by adding `.disable` to every file of the set (`X.pak`, `X.utoc`, `X.ucas`, `X.sig`).
 
 use crate::mods::ModInfo;
+use crate::pakname;
 use std::path::{Path, PathBuf};
 
 const EXTS: [&str; 4] = ["pak", "utoc", "ucas", "sig"];
@@ -69,7 +70,7 @@ pub fn list(paks: &Path) -> Vec<ModInfo> {
             .sum();
         out.push(ModInfo {
             id: stem.clone(),
-            name: stem.clone(),
+            name: pakname::logical_stem(&stem).to_string(),
             version: String::new(),
             author: String::new(),
             description: format!("Pak 模组 · {}", size_text(total)),
@@ -130,14 +131,14 @@ pub fn delete(paks: &Path, stem: &str) -> Result<(), String> {
     Ok(())
 }
 
+
 /// Android: `kmod/pak-order.txt` decides the order the loader mounts kmod/paks in (one `.pak` name per line, a later line
 /// wins). Paks it does not name come after the listed ones, by name.
 fn order_file(kmod: &Path) -> PathBuf {
     kmod.join("pak-order.txt")
 }
 
-/// Every pak (on or off) as `X.pak`, in the order they are mounted: the last one wins.
-pub fn order(kmod: &Path, paks: &Path) -> Vec<String> {
+fn order_by_file(kmod: &Path, paks: &Path) -> Vec<String> {
     let mut names: Vec<String> = list(paks).into_iter().map(|m| format!("{}.pak", m.file)).collect();
     names.sort();
     let text = std::fs::read_to_string(order_file(kmod)).unwrap_or_default();
@@ -152,37 +153,81 @@ pub fn order(kmod: &Path, paks: &Path) -> Vec<String> {
     out
 }
 
-pub fn set_order(kmod: &Path, names: &[String]) -> Result<(), String> {
+/// Windows: the engine's own order, from the file names (equal priorities by name).
+fn order_by_priority(paks: &Path) -> Vec<String> {
+    let mut names: Vec<String> = list(paks).into_iter().map(|m| format!("{}.pak", m.file)).collect();
+    names.sort_by(|a, b| pakname::priority(a).cmp(&pakname::priority(b)).then_with(|| a.to_lowercase().cmp(&b.to_lowercase())));
+    names
+}
+
+/// Every pak (on or off) as its file name `X.pak`, in load order: the last one wins.
+pub fn order(kmod: &Path, paks: &Path) -> Vec<String> {
+    if cfg!(target_os = "android") {
+        order_by_file(kmod, paks)
+    } else {
+        order_by_priority(paks)
+    }
+}
+
+fn check_names(names: &[String]) -> Result<(), String> {
     if names.iter().any(|n| !n.to_lowercase().ends_with(".pak") || !valid_stem(n) || n.contains(['\n', '\r'])) {
         return Err("Pak 名字不合法".into());
     }
+    Ok(())
+}
+
+fn set_order_file(kmod: &Path, names: &[String]) -> Result<(), String> {
+    check_names(names)?;
     std::fs::create_dir_all(kmod).map_err(|e| e.to_string())?;
     let mut text = names.join("\n");
     text.push('\n');
     std::fs::write(order_file(kmod), text).map_err(|e| e.to_string())
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn order_follows_the_file_then_names() {
-        let root = std::env::temp_dir().join(format!("kmod-order-test-{}", std::process::id()));
-        let paks = root.join("paks");
-        std::fs::create_dir_all(&paks).unwrap();
-        for f in ["b.pak", "中文_P.pak", "a.pak.disable", "c.pak"] {
-            std::fs::write(paks.join(f), b"x").unwrap();
+/// Windows: renames every pak set so its name carries its place (`X_P.kmod_01_P.pak`, `…_02_P`, …; see pakname.rs).
+fn set_order_by_names(paks: &Path, names: &[String]) -> Result<(), String> {
+    check_names(names)?;
+    for (i, name) in names.iter().enumerate() {
+        let stem = &name[..name.len() - 4];
+        if is_base_game(stem) {
+            return Err("不能改游戏本体的 pak".into());
         }
-        assert_eq!(order(&root, &paks), ["a.pak", "b.pak", "c.pak", "中文_P.pak"]);
-        set_order(&root, &["中文_P.pak".into(), "gone.pak".into(), "a.pak".into()]).unwrap();
-        assert_eq!(order(&root, &paks), ["中文_P.pak", "a.pak", "b.pak", "c.pak"]);
-        assert!(set_order(&root, &["../x.pak".into()]).is_err());
-        std::fs::remove_dir_all(&root).unwrap();
+        let want = pakname::tagged_stem(pakname::logical_stem(stem), i as u32 + 1);
+        if want == stem {
+            continue;
+        }
+        for on in [true, false] {
+            for f in set_files(paks, stem, on) {
+                let file = f.file_name().unwrap_or_default().to_string_lossy().to_string();
+                let renamed = file.replacen(stem, &want, 1);
+                let to = paks.join(&renamed);
+                if to.exists() {
+                    return Err(format!("{renamed} 已经存在"));
+                }
+                std::fs::rename(&f, &to).map_err(|e| {
+                    if e.raw_os_error() == Some(32) || e.kind() == std::io::ErrorKind::PermissionDenied {
+                        format!("{} 被占用，请先关闭游戏", f.display())
+                    } else {
+                        e.to_string()
+                    }
+                })?;
+            }
+        }
+    }
+    Ok(())
+}
+
+/// `names`: the pak files (`X.pak`, as `order` returns them) in the new order.
+pub fn set_order(kmod: &Path, paks: &Path, names: &[String]) -> Result<(), String> {
+    if cfg!(target_os = "android") {
+        set_order_file(kmod, names)
+    } else {
+        set_order_by_names(paks, names)
     }
 }
 
-/// Copies a `.pak` and its `.utoc` / `.ucas` / `.sig` siblings into the Paks folder (enabled).
+/// Copies a `.pak` and its `.utoc` / `.ucas` / `.sig` siblings into the Paks folder (enabled). A copy that was renamed for
+/// the load order is replaced under its current name, so it keeps its place.
 pub fn install(paks: &Path, source: &str) -> Result<String, String> {
     let src = PathBuf::from(source);
     let stem = src
@@ -201,7 +246,7 @@ pub fn install(paks: &Path, source: &str) -> Result<String, String> {
     for e in EXTS {
         let f = from.join(format!("{stem}.{e}"));
         if f.is_file() {
-            let name = format!("{stem}.{e}");
+            let name = pakname::target(&dir, &format!("{stem}.{e}"));
             // a stale disabled copy would shadow the new one
             let _ = std::fs::remove_file(dir.join(format!("{name}{OFF}")));
             std::fs::copy(&f, dir.join(&name)).map_err(|e| e.to_string())?;
@@ -212,4 +257,49 @@ pub fn install(paks: &Path, source: &str) -> Result<String, String> {
         return Err("没有找到这个 pak 文件".into());
     }
     Ok(stem)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn order_follows_the_file_then_names() {
+        let root = std::env::temp_dir().join(format!("kmod-order-test-{}", std::process::id()));
+        let paks = root.join("paks");
+        std::fs::create_dir_all(&paks).unwrap();
+        for f in ["b.pak", "中文_P.pak", "a.pak.disable", "c.pak"] {
+            std::fs::write(paks.join(f), b"x").unwrap();
+        }
+        assert_eq!(order_by_file(&root, &paks), ["a.pak", "b.pak", "c.pak", "中文_P.pak"]);
+        set_order_file(&root, &["中文_P.pak".into(), "gone.pak".into(), "a.pak".into()]).unwrap();
+        assert_eq!(order_by_file(&root, &paks), ["中文_P.pak", "a.pak", "b.pak", "c.pak"]);
+        assert!(set_order_file(&root, &["../x.pak".into()]).is_err());
+        std::fs::remove_dir_all(&root).unwrap();
+    }
+
+    #[test]
+    fn windows_order_by_renaming() {
+        let paks = std::env::temp_dir().join(format!("kmod-order-win-{}", std::process::id()));
+        std::fs::create_dir_all(&paks).unwrap();
+        for f in ["B_P.pak", "B_P.utoc", "A_P.pak.disable", "C.pak", "kards-Windows.pak"] {
+            std::fs::write(paks.join(f), b"x").unwrap();
+        }
+        assert_eq!(order_by_priority(&paks), ["C.pak", "A_P.pak", "B_P.pak"]);
+        set_order_by_names(&paks, &["B_P.pak".into(), "C.pak".into(), "A_P.pak".into()]).unwrap();
+        assert_eq!(order_by_priority(&paks), ["B_P.kmod_01_P.pak", "C.kmod_02_P.pak", "A_P.kmod_03_P.pak"]);
+        assert!(paks.join("B_P.kmod_01_P.utoc").is_file() && paks.join("A_P.kmod_03_P.pak.disable").is_file());
+        // shown under the original name; a new copy of a renamed pak keeps its place
+        let shown: Vec<String> = list(&paks).into_iter().map(|m| m.name).collect();
+        assert_eq!(shown, ["A_P", "B_P", "C"]);
+        let src = paks.join("src");
+        std::fs::create_dir_all(&src).unwrap();
+        std::fs::write(src.join("B_P.pak"), b"new").unwrap();
+        install(&paks, &src.join("B_P.pak").to_string_lossy()).unwrap();
+        assert_eq!(std::fs::read(paks.join("B_P.kmod_01_P.pak")).unwrap(), b"new");
+        assert!(!paks.join("B_P.pak").exists());
+        set_order_by_names(&paks, &["A_P.kmod_03_P.pak".into(), "B_P.kmod_01_P.pak".into(), "C.kmod_02_P.pak".into()]).unwrap();
+        assert_eq!(order_by_priority(&paks), ["A_P.kmod_01_P.pak", "B_P.kmod_02_P.pak", "C.kmod_03_P.pak"]);
+        std::fs::remove_dir_all(&paks).unwrap();
+    }
 }

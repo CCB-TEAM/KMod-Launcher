@@ -224,7 +224,7 @@ pub fn list_mods(app: AppHandle) -> Result<Vec<ModInfo>, String> {
     let mut paks = paks::list(&d.paks);
     // say which mod a pak came from
     for p in &mut paks {
-        let file = format!("{}.pak", p.id);
+        let file = format!("{}.pak", p.name);         // the original name, also for a pak renamed for the load order
         if let Some(owner) = all.iter().find(|m| m.paks.contains(&file)) {
             p.description = format!("{} · 来自 {}", p.description, owner.name);
         }
@@ -309,7 +309,10 @@ pub fn pak_order(app: AppHandle) -> Result<Vec<String>, String> {
 #[tauri::command]
 pub fn set_pak_order(app: AppHandle, names: Vec<String>) -> Result<(), String> {
     let d = paths::dirs(&app)?;
-    paks::set_order(&d.kmod, &names)
+    if !cfg!(target_os = "android") && game_running() {
+        return Err("游戏正在运行，请先关闭游戏".into());
+    }
+    paks::set_order(&d.kmod, &d.paks, &names)
 }
 
 /// Last part of the loader log (about 200 KB).

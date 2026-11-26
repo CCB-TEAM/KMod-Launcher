@@ -176,7 +176,7 @@ export const api = {
     invoke<string>("install_remote", { id, url: v.url, sha256: v.sha256, size: v.size, allowNative, allowPaks }),
   deleteMod: (file: string, id: string, kind: string, pending: boolean, deletePaks = false) =>
     invoke<void>("delete_mod", { file, id, kind, pending, deletePaks }),
-  /** Android: pak files ("X.pak") in mount order, the last one wins */
+  /** pak files ("X.pak") in load order, the last one wins; on Windows setting it renames the files */
   pakOrder: () => invoke<string[]>("pak_order"),
   setPakOrder: (names: string[]) => invoke<void>("set_pak_order", { names }),
   readLog:(name: "kmod" | "proxy") => invoke<string>("read_log", { name }),

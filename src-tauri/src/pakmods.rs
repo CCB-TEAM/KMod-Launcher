@@ -3,6 +3,7 @@
 //! kmod/pak-owners.json remembers which package put which file there. The loader follows the same rules
 //! (core/lua/modloader.lua), so both write the same record.
 
+use crate::pakname;
 use serde::Serialize;
 use serde_json::{json, Map, Value};
 use sha2::{Digest, Sha256};
@@ -13,7 +14,7 @@ use std::path::{Path, PathBuf};
 const ENTRY_LIMIT: u64 = 512 * 1024 * 1024;
 const EXTS: [&str; 4] = ["pak", "utoc", "ucas", "sig"];
 const GAME_PAKS: [&str; 4] = ["kards-windows", "kards-android", "pakchunk", "global."];
-const OFF: &str = ".disable";
+use pakname::OFF;
 
 #[cfg(target_os = "android")]
 const PLATFORM: &str = "android";
@@ -103,11 +104,26 @@ fn valid_name(name: &str) -> bool {
         && lower.rsplit_once('.').is_some_and(|(stem, ext)| !stem.is_empty() && EXTS.contains(&ext))
 }
 
-/// Where a file of that name is now: waiting in pak-staged, in the paks folder, or switched off there.
+/// Where a file of that name is now: waiting in pak-staged, in the paks folder (perhaps renamed for the load order, see
+/// pakname.rs), or switched off there.
 fn current(kmod: &Path, paks: &Path, name: &str) -> Option<PathBuf> {
-    [kmod.join("pak-staged").join(name), paks.join(name), paks.join(format!("{name}{OFF}"))]
+    let staged = kmod.join("pak-staged").join(name);
+    if staged.is_file() {
+        return Some(staged);
+    }
+    pakname::on_disk(paks, name)
         .into_iter()
+        .flat_map(|n| [paks.join(&n), paks.join(format!("{n}{OFF}"))])
         .find(|p| p.is_file())
+}
+
+/// Deletes a file under every name it has in the paks folder, on or off.
+fn delete_everywhere(paks: &Path, name: &str) -> Result<(), String> {
+    for n in pakname::on_disk(paks, name) {
+        delete_file(&paks.join(&n))?;
+        delete_file(&paks.join(format!("{n}{OFF}")))?;
+    }
+    Ok(())
 }
 
 /// A package with paks must keep older loaders out: they would install the Lua part and silently drop the paks.
@@ -322,20 +338,21 @@ pub fn apply(kmod: &Path, paks: &Path, src: &Path, id: &str, p: &Plan) -> Result
     let mut order = p.write.clone();
     order.sort_by_key(|n| !n.to_ascii_lowercase().ends_with(".pak"));
     for n in &order {
-        let stem = n.rsplit_once('.').map(|s| s.0).unwrap_or(n);
-        let off = paks.join(format!("{n}{OFF}"));
+        // a pak renamed for the load order keeps its name, and new sidecar files get the same one
+        let disk = pakname::target(paks, n);
+        let stem = disk.rsplit_once('.').map(|s| s.0).unwrap_or(&disk);
+        let off = paks.join(format!("{disk}{OFF}"));
         let to = if off.is_file() || paks.join(format!("{stem}.pak{OFF}")).is_file() {
-            delete_file(&paks.join(n))?;
+            delete_file(&paks.join(&disk))?;
             off
         } else {
-            paks.join(n)
+            paks.join(&disk)
         };
         delete_file(&to)?;
         std::fs::rename(part(n), &to).map_err(|e| locked(&to, e))?;
     }
     for n in &p.remove {
-        delete_file(&paks.join(n))?;
-        delete_file(&paks.join(format!("{n}{OFF}")))?;
+        delete_everywhere(paks, n)?;
     }
     unstage(kmod, p.write.iter().chain(&p.remove))?;
     let mut owners = read_owners(kmod);
@@ -362,8 +379,7 @@ pub fn forget(kmod: &Path, paks: &Path, id: &str, delete: bool) -> Result<(), St
     if delete {
         let names: Vec<String> = files_of(Some(&record)).into_iter().map(|f| f.0).filter(|n| valid_name(n)).collect();
         for n in &names {
-            delete_file(&paks.join(n))?;
-            delete_file(&paks.join(format!("{n}{OFF}")))?;
+            delete_everywhere(paks, n)?;
         }
         unstage(kmod, names.iter())?;
     }
@@ -390,6 +406,26 @@ mod tests {
         }
         z.finish().unwrap();
         m
+    }
+
+    #[test]
+    fn a_pak_renamed_for_the_load_order_is_updated_in_place() {
+        let root = std::env::temp_dir().join(format!("kmod-pak-order-{}", std::process::id()));
+        let (kmod, paks, src) = (root.join("kmod"), root.join("Paks"), root.join("p.kmod"));
+        std::fs::create_dir_all(&kmod).unwrap();
+        let m = package(&src, "1", &[("A_P.pak", b"a1"), ("B_P.pak", b"b")]);
+        apply(&kmod, &paks, &src, "p", &plan(&kmod, &paks, &src, &m, false).unwrap()).unwrap();
+        std::fs::rename(paks.join("A_P.pak"), paks.join("A_P.kmod_02_P.pak")).unwrap();
+        assert_eq!(installed(&kmod, &paks)["p"].len(), 2);
+        let m = package(&src, "2", &[("A_P.pak", b"a2"), ("A_P.utoc", b"t")]);
+        let p = plan(&kmod, &paks, &src, &m, true).unwrap();
+        assert!(p.conflicts.is_empty() && p.remove == ["B_P.pak"], "{p:?}");
+        apply(&kmod, &paks, &src, "p", &p).unwrap();
+        assert_eq!(std::fs::read(paks.join("A_P.kmod_02_P.pak")).unwrap(), b"a2");
+        assert!(paks.join("A_P.kmod_02_P.utoc").is_file() && !paks.join("A_P.pak").exists() && !paks.join("B_P.pak").exists());
+        forget(&kmod, &paks, "p", true).unwrap();
+        assert_eq!(std::fs::read_dir(&paks).unwrap().count(), 0);
+        std::fs::remove_dir_all(&root).unwrap();
     }
 
     #[test]

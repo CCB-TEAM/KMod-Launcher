@@ -69,7 +69,7 @@ export default function Settings({ config, setConfig, platform, checkUpdate }: S
       </section>
       <section className="card">
         <h2>关于</h2>
-        <p className="muted">KMod Launcher 1.2.2 · MIT 许可证。KARDS 属于其所有者，本项目与其没有隶属关系。</p>
+        <p className="muted">KMod Launcher 1.2.3 · MIT 许可证。KARDS 属于其所有者，本项目与其没有隶属关系。</p>
         <div className="row">
           <button
             disabled={checking}

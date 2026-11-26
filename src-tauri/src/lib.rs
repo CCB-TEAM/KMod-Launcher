@@ -7,6 +7,7 @@ mod install;
 mod mods;
 mod net;
 mod pakmods;
+mod pakname;
 mod paks;
 mod paths;
 mod selfupdate;
