@@ -67,6 +67,12 @@ class PickArgs {
 class KModPlugin(private val activity: Activity) : Plugin(activity) {
 
     override fun load(webView: WebView) {
+        // an app, not a web page: no pinch or double-tap zoom
+        activity.runOnUiThread {
+            webView.settings.setSupportZoom(false)
+            webView.settings.builtInZoomControls = false
+            webView.settings.displayZoomControls = false
+        }
         Installer.register(activity.applicationContext)
     }
 
